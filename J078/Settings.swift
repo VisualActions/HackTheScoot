@@ -25,6 +25,7 @@ enum Keys {
     static let password = "password"
     static let soundOn = "soundOn"
     static let soundPreset = "soundPreset"
+    static let aboveStockAccepted = "aboveStockAccepted"
 }
 
 /// The two UNVERIFIED mappings, in one place so a swap is one switch.

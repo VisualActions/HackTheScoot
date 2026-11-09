@@ -244,9 +244,12 @@ struct ChooseScooterView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 16) {
+                Text("HackTheScoot")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .foregroundColor(.cyan)
+                    .padding(.top, 30)
                 Text("Which scooter do you have?")
                     .font(.system(size: 30, weight: .heavy, design: .rounded))
-                    .padding(.top, 30)
                 Text("You can change this later in Settings. The app still auto-detects when it connects.")
                     .font(.callout).foregroundColor(.secondary)
                 ForEach(ScooterModels.all) { m in

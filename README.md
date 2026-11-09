@@ -1,7 +1,7 @@
-# J078 app (v2)
+# HackTheScoot (v3)
 
-iPhone app for your Joyhis J078 scooter (and other scooters in log mode).
-v2 talks to the J078 the same way the 365 app does. The protocol was decoded on Nov 9 2026 from your own Bluetooth captures.
+iPhone app for your Joyhis J078 scooter (and other scooters in log mode). Formerly "J078 app".
+It talks to the J078 the same way the 365 app does. The protocol was decoded on Nov 9 2026 from your own Bluetooth captures.
 
 ## What's in it
 
@@ -13,22 +13,23 @@ v2 talks to the J078 the same way the 365 app does. The protocol was decoded on 
 - **Debug**: packet log (bytes sent over the air plus unscrambled), status bytes table (all 29 bytes, odometer? raw), scramble self-test, export the log as .txt.
 - **Choose your scooter** (DJI-style, on first launch and in Settings): Joyhis J078, Volpam, or Other. Your pick is listed first when scanning; auto-detect still decides the protocol.
 - **Developer mode** (Settings > Developer, asks first): a **Terminal** where you type hex codes (or shortcuts like `light on`, `gear sport`, `pw`) and send them, scrambled like the 365 app or raw, to any writable characteristic, and see every code live. Plus **Experimental**: a command explorer for `BD BE AB [cmd] [value]` that shows which status bytes changed after you send. These only send when you tap Send.
-- **Speed limits (coming soon)**: shows the current limits, read only.
+- **Speed limits (new in v3)**: a slider per mode, 6–45 km/h, shown in mph and km/h. Tap **Set** to send one command (`BD BE AB [mode byte] [km/h]`, scrambled). Under it you see what you asked for and what the scooter actually accepted (from its reply `DB EB BA [mode byte] [km/h set]`). If they differ it says "scooter declined, kept X mph". Above each mode's stock limit (Sport 31 km/h) is locked until you accept a one-time warning. Sport (A2) is checked on your scooter; Eco (A0), Drive (A1) and Walk (A3) are experimental. Volpam: needs a capture from the Volpam first, nothing is sent.
 
 ## What's checked and what isn't
 
-Checked on your scooter (Nov 9 captures): the scramble, light, park + password 000000, the 4 modes, the 500 ms keep-alive, live speed (bytes 7-8 / 10), and mode top speeds 4 / 8 / 11 / 19 mph (6 / 12 / 18 / 31 km/h).
+Checked on your scooter (Nov 9 captures): the scramble, light, park + password 000000, the 4 modes, the 500 ms keep-alive, live speed (bytes 7-8 / 10), and mode top speeds 4 / 8 / 11 / 19 mph (6 / 12 / 18 / 31 km/h), and the Sport speed-limit write + its reply.
 
 UNVERIFIED (best guesses):
 - **Start mode**: cmd 07, 01 = zero start, 00 = glide. If it's backwards, turn on "Swap" under Start mode (Controls or Settings).
 - **Units**: cmd 01, 01 = mile, 00 = km. Same "Swap" switch.
 - **Battery?**: status byte 10 (it read 100).
 - **Odometer?**: status bytes 23-26, shown raw in Debug.
+- **Speed limit for Eco / Drive / Walk**: mode bytes A0 / A1 / A3 follow the keep-alive pattern (experimental).
 - The Volpam path is from reading the vendor app; not checked on a real Volpam.
 
-**Not done on purpose:** changing speed limits. That command hasn't been captured on the J078 yet, and the app never sends guessed commands. Next step: if the 365 app has a speed setting, change it once while the Bluetooth log runs, then do the 3-button capture and send it.
+**Speed limit evidence:** the Nov 9 5:11 PM capture has the 365 app setting Sport 19 → 18 → 19 mph (`A2 1F` → `A2 1D` → `A2 1F`). At 3:23 PM the 365 app asked for 32 km/h and the scooter answered 31, so above-stock values may be refused by the scooter's firmware. The app shows you its answer either way. Running above stock can overheat or damage the motor, controller or battery. Wear a helmet.
 
-Nothing is installed on the scooter. On its own the app only sends the commands the 365 app sends; anything else only goes out when you type it in developer mode.
+Nothing is installed on the scooter. On its own the app only sends the commands the 365 app sends (speed limits only when you tap Set); anything else only goes out when you type it in developer mode.
 
 ## 1. Put it on GitHub
 
@@ -45,7 +46,7 @@ New repo:
      cd j078-app
      git init -b main
      git add .
-     git commit -m "J078 app v2"
+     git commit -m "HackTheScoot v3"
      git remote add origin https://github.com/YOUR-NAME/j078-app.git
      git push -u origin main
      ```

@@ -204,7 +204,7 @@ struct SettingsView: View {
                 }
 
                 Section("About") {
-                    Text("J078 app v2. Talks to the J078 the same way the 365 app does (decoded from your own Bluetooth captures, Nov 9). Light, park, modes and speed are checked on your scooter. Start mode, units, battery and odometer are best guesses. Nothing in this app changes speed limits.")
+                    Text("HackTheScoot v3. Talks to the J078 the same way the 365 app does (decoded from your own Bluetooth captures, Nov 9). Light, park, modes, speed and the Sport speed limit are checked on your scooter. Speed limits for Eco, Drive and Walk are experimental. Start mode, units, battery and odometer are best guesses. Volpam speed limits need a capture first.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }

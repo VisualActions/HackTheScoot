@@ -67,5 +67,5 @@ jobs:
           gh release create latest J078-unsigned.ipa \
             --target "$GITHUB_SHA" \
             --title "Latest build" \
-            --notes "Unsigned J078 IPA built from ${GITHUB_SHA::7}. Sideload it the same way as the README says." \
+            --notes "Unsigned HackTheScoot v3 IPA built from ${GITHUB_SHA::7}. Sideload it the same way as the README says." \
             --latest

@@ -51,6 +51,18 @@ enum Gear: Int, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// Gear byte in the speed-limit write BD BE AB [x] [kmh] and its ack DB EB BA [x] [kmh].
+    /// Same byte as the keep-alive. A2 (sport) VERIFIED on Nov 9 (A2 1D, A2 1F).
+    /// A0 eco / A1 drive / A3 walk follow the keep-alive pattern: UNVERIFIED (experimental).
+    var limitByte: UInt8 { return keepAliveByte }
+
+    /// true only for the gear whose speed-limit write was seen in his capture.
+    var limitWriteVerified: Bool { return self == .sport }
+
+    static func fromLimitByte(_ b: UInt8) -> Gear? {
+        return Gear.allCases.first { $0.limitByte == b }
+    }
+
     static func fromStatus(_ b: UInt8) -> Gear? {
         return Gear.allCases.first { $0.statusCode == b }
     }
@@ -283,6 +295,19 @@ enum Proto {
         return (g, Int(d[4]))
     }
 
+    /// Speed-limit write (decoded form): BD BE AB [gear byte] [kmh]. VERIFIED for sport (A2).
+    static func setLimit(_ gear: Gear, kmh: Int) -> [UInt8] {
+        let v = UInt8(max(1, min(0xFE, kmh)))   // FF is the keep-alive filler, never send it as a speed
+        return [0xBD, 0xBE, 0xAB, gear.limitByte, v]
+    }
+
+    /// Ack to a speed-limit write: DB EB BA [gear byte] [kmh the scooter actually set]. VERIFIED (A2).
+    /// Nov 9 15:23: the 365 app asked A2 20 (32 km/h), the scooter acked A2 1F (kept 31).
+    static func parseLimitAck(_ d: [UInt8]) -> (Gear, Int)? {
+        guard d.count >= 5, d[0] == 0xDB, d[1] == 0xEB, d[2] == 0xBA, let g = Gear.fromLimitByte(d[3]) else { return nil }
+        return (g, Int(d[4]))
+    }
+
     static func isPasswordOK(_ d: [UInt8]) -> Bool {
         return d.count >= 5 && d[0] == 0xDB && d[1] == 0xEB && d[2] == 0xCA && d[3] == 0xCA && d[4] == 0xFF
     }
@@ -298,6 +323,9 @@ enum Proto {
             let sp = String(format: "%.1f", s.speed)
             let fl = String(format: "%02X", s.flags)
             return "status: \(g), speed \(sp), light \(s.light ? "on" : "off"), park \(s.parked ? "on" : "off"), flags \(fl)"
+        }
+        if let ack = parseLimitAck(d) {
+            return "speed limit ack: \(ack.0.name) set to \(ack.1) km/h"
         }
         if let lim = parseLimit(d) {
             return "limit: \(lim.0.name) = \(lim.1) km/h"
@@ -323,7 +351,10 @@ enum Proto {
         case Cmd.gear:
             let g = Gear.allCases.first { $0.setValue == d[4] }
             return "gear " + (g?.name ?? "?")
-        case 0xA0...0xA3: return "keep-alive"
+        case 0xA0...0xA3:
+            if d[4] == 0xFF { return "keep-alive" }
+            let g = Gear.fromLimitByte(d[3])
+            return "set speed limit \(g?.name ?? "?") = \(d[4]) km/h"
         default: return ""
         }
     }

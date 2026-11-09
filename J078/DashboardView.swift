@@ -92,6 +92,16 @@ struct DashboardView: View {
     }
 
     private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("HackTheScoot")
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .foregroundColor(speedColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            statusRow
+        }
+    }
+
+    private var statusRow: some View {
         HStack {
             Circle()
                 .fill(ble.canControl ? Color.green : (ble.connected != nil ? Color.orange : Color.red))

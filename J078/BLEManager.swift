@@ -72,6 +72,11 @@ final class BLEManager: NSObject, ObservableObject {
     /// Gear speed limits in km/h. Live values from DB EB BA replies overwrite the captured defaults.
     @Published var limitsKmh: [Gear: Int] = [:]
     @Published var limitsLive: Set<Gear> = []
+    /// Speed-limit writes: what he asked for, and what the scooter's ack said it actually set.
+    @Published var limitRequested: [Gear: Int] = [:]
+    @Published var limitAccepted: [Gear: Int] = [:]
+    @Published var limitSentAt: [Gear: Date] = [:]
+    @Published var limitAckAt: [Gear: Date] = [:]
     /// Highest speed seen this session, per gear, in the scooter's unit at the time.
     @Published var topSeen: [Gear: Double] = [:]
     @Published var tripMax: Double = 0
@@ -146,7 +151,7 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     func exportLogFile() -> URL? {
-        var lines = ["J078 app v2 log, exported \(Date())", "device: \(connectedName) kind: \(kind.short)"]
+        var lines = ["HackTheScoot v3 log, exported \(Date())", "device: \(connectedName) kind: \(kind.short)"]
         if let s = status {
             lines.append("last status (decoded): " + Proto.hex(s.decoded))
         }
@@ -294,6 +299,10 @@ final class BLEManager: NSObject, ObservableObject {
         tripMax = 0
         topSeen = [:]
         limitsLive = []
+        limitRequested = [:]
+        limitAccepted = [:]
+        limitSentAt = [:]
+        limitAckAt = [:]
         passwordState = "not sent yet"
         busy = nil
         lastLoggedStatus = []
@@ -450,6 +459,20 @@ final class BLEManager: NSObject, ObservableObject {
         writeJ078(Proto.command(cmd, value), note: note)
     }
 
+    /// One speed-limit write, only when he taps Set. No loops, no retries.
+    func setSpeedLimit(_ g: Gear, kmh: Int) {
+        guard canControl else {
+            info("Not sent, no J078 connected: speed limit")
+            return
+        }
+        limitRequested[g] = kmh
+        limitAccepted[g] = nil
+        limitAckAt[g] = nil
+        limitSentAt[g] = Date()
+        let tag = g.limitWriteVerified ? "" : " (experimental)"
+        writeJ078(Proto.setLimit(g, kmh: kmh), note: "set speed limit \(g.name) = \(kmh) km/h\(tag)")
+    }
+
     func setLight(_ on: Bool) {
         sendCommand(Proto.Cmd.light, on ? 0x01 : 0x00, note: on ? "light on" : "light off")
     }
@@ -572,6 +595,18 @@ final class BLEManager: NSObject, ObservableObject {
             }
             return
         }
+        if let ack = Proto.parseLimitAck(d) {
+            limitAccepted[ack.0] = ack.1
+            limitAckAt[ack.0] = Date()
+            limitsKmh[ack.0] = ack.1
+            limitsLive.insert(ack.0)
+            var note = Proto.label(d)
+            if let want = limitRequested[ack.0], want != ack.1 {
+                note += " (asked \(want), scooter declined)"
+            }
+            addLog(.rx, "6E400003", raw: raw, decoded: d, note: note)
+            return
+        }
         if let lim = Proto.parseLimit(d) {
             limitsKmh[lim.0] = lim.1
             limitsLive.insert(lim.0)
@@ -613,7 +648,7 @@ extension BLEManager: CBCentralManagerDelegate {
         switch central.state {
         case .poweredOn: bluetoothState = "Bluetooth: on"
         case .poweredOff: bluetoothState = "Bluetooth: off"
-        case .unauthorized: bluetoothState = "Bluetooth: not allowed (Settings > J078 > Bluetooth)"
+        case .unauthorized: bluetoothState = "Bluetooth: not allowed (Settings > HackTheScoot > Bluetooth)"
         case .unsupported: bluetoothState = "Bluetooth: not supported"
         case .resetting: bluetoothState = "Bluetooth: resetting"
         case .unknown: bluetoothState = "Bluetooth: unknown"

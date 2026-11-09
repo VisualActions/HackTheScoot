@@ -104,7 +104,7 @@ struct ControlsView: View {
                     NavigationLink {
                         SpeedLimitsView(ble: ble)
                     } label: {
-                        Label("Speed limits (coming soon)", systemImage: "lock")
+                        Label("Set speed limits", systemImage: "speedometer")
                     }
                 }
             }
@@ -152,28 +152,173 @@ struct TopSpeedsList: View {
 
 struct SpeedLimitsView: View {
     @ObservedObject var ble: BLEManager
+    @AppStorage(Keys.aboveStockAccepted) private var aboveStockAccepted = false
+    @AppStorage("chosenModel") private var chosenModel = ""
+    @State private var showWarning = false
+
+    private var isVolpam: Bool {
+        if ble.connected != nil { return ble.kind == .volpam }
+        return chosenModel == "volpam"
+    }
 
     var body: some View {
         List {
-            Section {
-                Text("Coming soon. Changing the limits needs one more Bluetooth capture: if the 365 app has a speed setting, change it once while logging, then send the log. Until that command is seen on your scooter, this app sends nothing here.")
-                    .font(.callout)
-            }
-            Section("Current limits (read only)") {
-                ForEach(Gear.allCases) { g in
-                    let kmh = ble.limitsKmh[g] ?? g.capturedLimitKmh
-                    VStack(alignment: .leading) {
-                        HStack {
-                            Text(g.name).bold()
-                            Spacer()
-                            Text("\(Gear.mph(for: g, kmh: kmh)) mph · \(kmh) km/h").monospacedDigit()
-                        }
-                        Slider(value: .constant(Double(kmh)), in: 0...40, step: 1)
-                            .disabled(true)
+            if isVolpam {
+                Section {
+                    Label("Needs a capture from the Volpam", systemImage: "exclamationmark.triangle")
+                        .font(.headline)
+                    Text("The Volpam uses its own code, and its speed-limit command hasn't been captured yet, so this app sends nothing to it here. To add it: turn on Bluetooth logging, change the speed in the Volpam's own app, do the 3-button capture and send it.")
+                        .font(.callout).foregroundColor(.secondary)
+                }
+            } else {
+                Section {
+                    Text("Pick a speed and tap Set. The app sends one command only when you tap Set, nothing automatic, no retries. Under each mode you see what the scooter actually accepted (from its reply).")
+                        .font(.callout)
+                    Text("Above your stock limit may be refused: on Nov 9 the 365 app asked for 32 km/h in Sport and the scooter answered 31 (kept 19 mph).")
+                        .font(.caption).foregroundColor(.orange)
+                    if !ble.canControl {
+                        Text(ble.connected == nil ? "Connect to your J078 first (Connect tab)." : "This device isn't on the J078 protocol, so nothing is sent.")
+                            .font(.caption).foregroundColor(.secondary)
                     }
+                }
+
+                Section {
+                    if aboveStockAccepted {
+                        Label("Above-stock speeds unlocked", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Button("Lock back to stock") { aboveStockAccepted = false }
+                    } else {
+                        Button {
+                            showWarning = true
+                        } label: {
+                            Label("Allow speeds above stock...", systemImage: "lock.open")
+                        }
+                        Text("Until you accept the warning, each slider stops at that mode's stock limit.")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("Above stock")
+                }
+
+                ForEach([Gear.sport, Gear.drive, Gear.eco, Gear.walk]) { g in
+                    SpeedLimitRow(ble: ble, gear: g, aboveStock: aboveStockAccepted)
                 }
             }
         }
         .navigationTitle("Speed limits")
+        .alert("Above your normal limit", isPresented: $showWarning) {
+            Button("I understand", role: .destructive) { aboveStockAccepted = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(SpeedLimitText.warning)
+        }
+    }
+}
+
+enum SpeedLimitText {
+    static let warning = "Speeds above your scooter's normal limit may be declined by the scooter. Running too high can overheat or damage the motor, controller or battery, and is less safe. Wear a helmet. I understand."
+    static let minKmh = 6
+    static let maxKmh = 45
+
+    static func both(_ kmh: Int, _ gear: Gear) -> String {
+        return "\(Gear.mph(for: gear, kmh: kmh)) mph · \(kmh) km/h"
+    }
+}
+
+struct SpeedLimitRow: View {
+    @ObservedObject var ble: BLEManager
+    let gear: Gear
+    let aboveStock: Bool
+    @State private var want: Double = -1
+
+    private var stock: Int { gear.capturedLimitKmh }
+    private var current: Int { ble.limitsKmh[gear] ?? stock }
+    private var top: Int { aboveStock ? SpeedLimitText.maxKmh : max(stock, SpeedLimitText.minKmh) }
+    private var wantKmh: Int {
+        let v = want < 0 ? current : Int(want.rounded())
+        return min(max(v, SpeedLimitText.minKmh), top)
+    }
+
+    var body: some View {
+        Section {
+            HStack {
+                Image(systemName: gear.icon).foregroundColor(gear.color)
+                Text(gear.name).bold()
+                Spacer()
+                Text(gear.limitWriteVerified ? "verified" : "experimental")
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(gear.limitWriteVerified ? Color.green.opacity(0.25) : Color.orange.opacity(0.25))
+                    .cornerRadius(6)
+            }
+            Text("Scooter now: " + SpeedLimitText.both(current, gear) + (ble.limitsLive.contains(gear) ? " (live)" : " (Nov 9 capture)"))
+                .font(.caption.monospacedDigit()).foregroundColor(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(SpeedLimitText.both(wantKmh, gear))
+                        .font(.title3.bold().monospacedDigit())
+                        .foregroundColor(wantKmh > stock ? .orange : .primary)
+                    Spacer()
+                    Button("Set") {
+                        ble.setSpeedLimit(gear, kmh: wantKmh)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(gear.color)
+                    .disabled(!ble.canControl)
+                }
+                Slider(value: Binding(get: { Double(wantKmh) }, set: { want = $0 }),
+                       in: Double(SpeedLimitText.minKmh)...Double(max(top, SpeedLimitText.minKmh + 1)), step: 1)
+                    .tint(gear.color)
+                    .disabled(top <= SpeedLimitText.minKmh)
+                HStack {
+                    Text("\(SpeedLimitText.minKmh) km/h").font(.caption2)
+                    Spacer()
+                    Text("stock \(stock) km/h").font(.caption2)
+                    Spacer()
+                    Text("\(top) km/h").font(.caption2)
+                }
+                .foregroundColor(.secondary)
+                if wantKmh > stock {
+                    Text("Above stock: the scooter may refuse it.")
+                        .font(.caption).foregroundColor(.orange)
+                }
+            }
+
+            if let asked = ble.limitRequested[gear] {
+                ResultLine(gear: gear, asked: asked, accepted: ble.limitAccepted[gear])
+            }
+        } footer: {
+            if !gear.limitWriteVerified {
+                Text("Experimental: the \(gear.name) code (BD BE AB \(String(format: "%02X", gear.limitByte)) [km/h]) follows the pattern, it wasn't seen in your capture. Sport (A2) is the checked one.")
+            }
+        }
+    }
+}
+
+struct ResultLine: View {
+    let gear: Gear
+    let asked: Int
+    let accepted: Int?
+    private var experimental: Bool { !gear.limitWriteVerified }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Asked: " + SpeedLimitText.both(asked, gear))
+                .font(.callout.monospacedDigit())
+            if let got = accepted {
+                Text("Scooter accepted: " + SpeedLimitText.both(got, gear))
+                    .font(.callout.bold().monospacedDigit())
+                    .foregroundColor(got == asked ? .green : .orange)
+                if got != asked {
+                    Text("scooter declined, kept \(Gear.mph(for: gear, kmh: got)) mph")
+                        .font(.callout.bold())
+                        .foregroundColor(.red)
+                }
+            } else {
+                Text(experimental ? "No answer from the scooter yet. If none comes, this mode's code may be wrong." : "Waiting for the scooter's answer...")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+        }
     }
 }
