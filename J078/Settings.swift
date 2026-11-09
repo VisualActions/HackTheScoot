@@ -101,7 +101,8 @@ extension Color {
     }
 }
 
-func fontDesign(_ s: String) -> Font.Design {
+/// Named so it doesn't clash with SwiftUI's View.fontDesign(_:) modifier.
+func speedFontDesign(_ s: String) -> Font.Design {
     switch s {
     case "mono": return .monospaced
     case "normal": return .default

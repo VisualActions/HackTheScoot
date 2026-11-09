@@ -75,7 +75,7 @@ struct DashboardView: View {
             VStack(spacing: 14) {
                 header
                 SpeedGauge(speed: speed.value, maxSpeed: gaugeMax, color: speedColor,
-                           style: gaugeStyle, unit: speed.unit, design: fontDesign(fontName),
+                           style: gaugeStyle, unit: speed.unit, design: speedFontDesign(fontName),
                            subtitle: showGear ? (ble.status?.gear?.name.uppercased() ?? "--") : "")
                     .frame(maxHeight: 380)
                 tiles
