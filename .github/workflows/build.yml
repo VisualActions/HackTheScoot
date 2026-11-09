@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    permissions:
+      contents: write
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -55,3 +57,15 @@ jobs:
           name: J078-unsigned-ipa
           path: J078-unsigned.ipa
           if-no-files-found: error
+
+      - name: Publish the .ipa to the "latest" GitHub Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest J078-unsigned.ipa \
+            --target "$GITHUB_SHA" \
+            --title "Latest build" \
+            --notes "Unsigned J078 IPA built from ${GITHUB_SHA::7}. Sideload it the same way as the README says." \
+            --latest
