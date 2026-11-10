@@ -145,7 +145,10 @@ def main():
                 "after_completion[redirect][url]": f"{SITE}/pro-thanks.html?plan={p['key']}",
                 "allow_promotion_codes": "false",
                 "metadata[hts_key]": p["key"],
-            }, idem=idem("link", p["key"], prices[p["lookup"]]["id"]))
+                # Test links use plain Stripe payments. Whether to use Stripe Managed
+                # Payments (Stripe as merchant of record) is a go-live decision for the adult.
+                "managed_payments[enabled]": "false",
+            }, idem=idem("link", p["key"], prices[p["lookup"]]["id"], "nomp"))
         url = l["url"]
         out["links"][p["key"]] = url
         print(f"::notice title=Stripe test link {p['key']}::{url}")
