@@ -15,6 +15,7 @@ final class ScreenSmokeTests: XCTestCase {
         super.setUp()
         UserDefaults.standard.set("j078", forKey: "chosenModel")
         UserDefaults.standard.set(false, forKey: "startup.enabled")
+        UserDefaults.standard.set(true, forKey: Onboarding.doneKey)
         window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
     }
 

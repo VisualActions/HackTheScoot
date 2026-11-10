@@ -122,6 +122,17 @@ struct DashTheme: Codable, Equatable {
         night.walkColor = "#6E6E6E"; night.ecoColor = "#3D7A50"; night.driveColor = "#3A5C8C"; night.sportColor = "#8C3030"
         return [DashTheme(), classic, digital, perf, night]
     }
+
+    /// v4.1 Pro theme pack. NEW looks only: every preset above stays free.
+    static var proPresets: [DashTheme] {
+        var carbon = DashTheme(); carbon.name = "Carbon"; carbon.gauge = "performance"; carbon.accent = "#E5E5EA"; carbon.background = "#121214"; carbon.backgroundStyle = "solid"; carbon.font = "mono"
+        var gold = DashTheme(); gold.name = "Midnight Gold"; gold.gauge = "classic"; gold.accent = "#D4AF37"; gold.background = "#0B0B12"; gold.backgroundStyle = "gradient"; gold.font = "normal"
+        var ice = DashTheme(); ice.name = "Ice"; ice.gauge = "digital"; ice.accent = "#64D2FF"; ice.background = "#03131C"; ice.backgroundStyle = "gradient"; ice.font = "rounded"; ice.animationIntensity = 0.4
+        var track = DashTheme(); track.name = "Track Day"; track.gauge = "performance"; track.accent = "#FF9F0A"; track.backgroundStyle = "black"; track.useModeColor = true; track.layout = "focus"; track.tiles = ["mode", "limit", "trip"]; track.animationIntensity = 0.9
+        var stealth = DashTheme(); stealth.name = "Stealth"; stealth.gauge = "digital"; stealth.accent = "#8E8E93"; stealth.backgroundStyle = "black"; stealth.layout = "minimal"; stealth.tiles = ["mode"]; stealth.animationIntensity = 0.2
+        var mint = DashTheme(); mint.name = "Mint"; mint.gauge = "classic"; mint.accent = "#30D158"; mint.background = "#04140A"; mint.backgroundStyle = "solid"; mint.font = "rounded"
+        return [carbon, gold, ice, track, stealth, mint]
+    }
 }
 
 /// Information tiles the dashboard can show (Dashboard Designer).

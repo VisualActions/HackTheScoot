@@ -17,6 +17,8 @@ struct Trip: Codable, Identifiable, Equatable {
     var interruptions: Int = 0
     /// Optional route, only when the user turned GPS on. Never uploaded.
     var route: [RoutePoint]? = nil
+    /// v4.1: which Garage scooter this ride belongs to (nil for rides from before 4.1).
+    var scooterID: UUID? = nil
 
     struct RoutePoint: Codable, Equatable {
         var t: TimeInterval

@@ -14,9 +14,20 @@ final class TripManager: ObservableObject {
     private let store = TripStore()
     private var timer: Timer?
     var scooterName: () -> String = { "Scooter" }
+    /// v4.1: the Garage's active scooter, stamped on every new trip.
+    var scooterID: () -> UUID? = { nil }
+
+    /// The app's trip manager, for screens opened from More.
+    static weak var live: TripManager?
+    static var sharedForMore: TripManager {
+        if let l = live { return l }
+        let t = TripManager()
+        return t
+    }
 
     init() {
         trips = store.load().sorted { $0.start > $1.start }
+        TripManager.live = self
         let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
@@ -52,6 +63,7 @@ final class TripManager: ObservableObject {
 
     private func begin(simulated: Bool, at t: Date, first: TripSample) {
         current = Trip(start: t, end: nil, scooterName: scooterName(), source: simulated ? "simulation" : "bluetooth", samples: [first])
+        if !simulated { current?.scooterID = scooterID() }
         Feedback.shared.fire(.tripStart)
     }
 

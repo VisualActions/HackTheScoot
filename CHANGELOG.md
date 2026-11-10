@@ -1,5 +1,26 @@
 # Changelog
 
+## 4.1.0 beta (build 6): onboarding, Garage, HackTheScoot Pro (test mode)
+
+Built and tested in CI (simulator). Not yet tried on a real phone or scooter. Nothing from 4.0.1 was removed or capped: the 6-45 km/h sliders, v3's Bluetooth flow, the terminal, themes, designer, layouts, replay and export all work as before and stay free.
+
+### First-launch intro
+Five short pages: welcome, why the app needs Bluetooth (iOS's permission prompt now comes right after this page on a new install), pick your scooter from the Garage, find it (scan + connect), and the four tabs. Skippable on every page, shown once, re-openable from More > Show the intro again. Phones that already answered the Bluetooth prompt start Bluetooth exactly like 4.0.1.
+
+### Garage
+More > Garage. Save as many scooters as you like; the J078 ("My J078") and Dad's Volpam are there from the start. Each one has a name, model (from the research compatibility database), compatibility level, a photo or color, notes, its own last-known stats (top speed seen, mode, limits) and its own trips. Switch the active scooter and the app auto-connects to it (once it has connected on this phone). A scooter that connects is linked to its own entry by its Bluetooth id; an unknown device is never guessed onto one of yours. New trips are stamped with the active scooter. Old trips still show in Trips.
+
+### HackTheScoot Pro (TEST MODE)
+- Tiers from the spec: FREE / PRO ($3.99/mo, $29.99/yr) / DEVELOPER (later, not for sale).
+- Pro adds NEW extras only: a Pro theme pack (6 looks), advanced trip analytics (totals, records, speed histogram, time in mode, per scooter), CSV + GPX export, extended packet-log analysis. Developer previews: frame compare and JSON log export.
+- Never paywalled: connecting, controls, speed limits (incl. above-stock), fault warnings, safety info, compatibility info, Garage, and everything 4.0.1 had. There is no speed-unlock purchase. Unit tests enforce this.
+- StoreKit 2 paywall: prices, intro trial, restore, manage subscription, cancel steps. `Support/HackTheScoot.storekit` for local testing in Xcode.
+- More > Developer settings > Test unlock: a clearly labelled switch to see Pro/Developer without paying.
+- Web: "Get Pro (test)" on the download page uses Stripe TEST Payment Links (card 4242 4242 4242 4242). The `Stripe test setup` workflow creates them from the `STRIPE_SECRET_KEY` secret and prints only the public links.
+
+### Tests
+New logic tests (Garage rules, compatibility seed, tiers, "nothing safety-related is sold", CSV/GPX, analytics, log analysis, frame compare) and new screen tests that open the intro (every page), Garage (list, every scooter, add), paywall, every Pro screen free and unlocked, developer settings and every Pro theme on the dashboard.
+
 ## 4.0.1 beta (build 5): crash fixes, v3 Bluetooth timing, features back, new UI
 
 Untested on hardware yet: built and tested in CI (simulator), not on a real J078.

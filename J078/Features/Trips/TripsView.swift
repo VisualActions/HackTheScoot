@@ -44,6 +44,15 @@ struct TripsView: View {
                             .swipeActions { Button("Delete", role: .destructive) { trips.delete(t) } }
                     }
                 }
+                Section {
+                    NavigationLink { TripAnalyticsView(trips: trips) } label: {
+                        HStack {
+                            Label("Trip analytics", systemImage: "chart.bar.xaxis")
+                            Spacer()
+                            if !StoreManager.shared.allows(.tripAnalytics) { Text("PRO").font(.caption2.weight(.heavy)).foregroundColor(.secondary) }
+                        }
+                    }
+                }
                 if !trips.trips.isEmpty {
                     Section { Button("Clear all history", role: .destructive) { confirmClear = true } }
                 }
@@ -102,6 +111,7 @@ struct TripDetailView: View {
                 NavigationLink("Replay this trip") { TripReplayView(trip: trip, mph: mph) }
                 Button("Export summary") { if let u = trips.exportURL(trip, mph: mph) { share = ShareItem(url: u) } }
             }
+            TripProExportSection(trip: trip, mph: mph)
         }
         .navigationTitle("Ride")
         .sheet(item: $share) { ShareSheet(items: [$0.url]) }

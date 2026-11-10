@@ -13,11 +13,24 @@ struct MoreView: View {
     @AppStorage(Keys.showDashControls) private var showDashControls = true
     @AppStorage(Keys.gaugeMaxAuto) private var gaugeMaxAuto = true
     @AppStorage(Keys.gaugeMax) private var gaugeMax = 30.0
+    @ObservedObject var garage = GarageStore.shared
+    @ObservedObject var store = StoreManager.shared
 
     var body: some View {
         NavigationView {
             List {
                 Section("Scooter") {
+                    NavigationLink { GarageView(ble: ble) } label: {
+                        HStack(spacing: 12) {
+                            if let a = garage.active { ScooterAvatar(scooter: a, size: 30) } else { Image(systemName: "car.2.fill") }
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Garage")
+                                Text(garage.active.map { "Active: \($0.name)" } ?? "Add your scooters").font(.caption).foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Text("\(garage.scooters.count)").foregroundColor(.secondary)
+                        }
+                    }
                     NavigationLink { ConnectView(ble: ble) } label: {
                         HStack {
                             Label("Connect and my scooters", systemImage: "antenna.radiowaves.left.and.right")
@@ -38,7 +51,20 @@ struct MoreView: View {
                         Stepper(value: $gaugeMax, in: 10...80, step: 5) { Text("Gauge max: \(safeInt(gaugeMax))") }
                     }
                 }
+                Section(header: Text("HackTheScoot Pro"), footer: Text(Billing.testMode ? "Test mode: nothing here charges real money." : "")) {
+                    NavigationLink { PaywallView() } label: {
+                        HStack {
+                            Label("Pro", systemImage: "star.circle")
+                            Spacer()
+                            Text(store.tier.name + (store.isTestUnlocked ? " (test)" : "")).foregroundColor(.secondary)
+                        }
+                    }
+                    NavigationLink { TripAnalyticsView(trips: TripManager.sharedForMore) } label: { proLabel("Trip analytics", "chart.bar.xaxis", .tripAnalytics) }
+                    NavigationLink { LogAnalysisView(ble: ble) } label: { proLabel("Log analysis", "waveform.path.ecg", .extendedLogAnalysis) }
+                    NavigationLink { FrameDiffView() } label: { proLabel("Frame compare", "rectangle.split.2x1", .protocolWorkspace) }
+                }
                 Section("App") {
+                    Button { NotificationCenter.default.post(name: .hackTheScootShowOnboarding, object: nil) } label: { Label("Show the intro again", systemImage: "hand.wave") }
                     NavigationLink { StartupStudioView() } label: { Label("Startup Studio", systemImage: "sparkles") }
                     NavigationLink { FeedbackSettingsView() } label: { Label("Haptics and sounds", systemImage: "waveform") }
                     Toggle(isOn: $soundOn) { Label("Sound when a scooter connects", systemImage: "speaker.wave.2") }
@@ -51,6 +77,7 @@ struct MoreView: View {
                     NavigationLink { DiagnosticsView(ble: ble) } label: { Label("Diagnostics", systemImage: "stethoscope") }
                     NavigationLink { DevLabView(ble: ble) } label: { Label("Developer Lab", systemImage: "terminal") }
                     NavigationLink { LogPage(ble: ble) } label: { Label("Packet log", systemImage: "list.bullet.rectangle") }
+                    NavigationLink { DeveloperSettingsView() } label: { Label("Developer settings (test unlock)", systemImage: "hammer") }
                 }
                 Section(header: Text("About"), footer: Text("Trips, logs and settings stay on this phone unless you export them. Nothing is uploaded.")) {
                     HStack(spacing: 12) {
@@ -67,6 +94,16 @@ struct MoreView: View {
             .navigationTitle("More")
         }
         .navigationViewStyle(.stack)
+    }
+}
+
+private extension MoreView {
+    func proLabel(_ title: String, _ icon: String, _ f: ProFeature) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+            Spacer()
+            if !store.allows(f) { Image(systemName: "lock.fill").font(.caption).foregroundColor(.secondary) }
+        }
     }
 }
 
@@ -118,6 +155,7 @@ struct ThemeEditorView: View {
                     }
                 }
             }
+            ProThemesSection()
             Section("Gauge") {
                 Picker("Design", selection: $themes.theme.gauge) {
                     Text("Classic").tag("classic"); Text("Digital").tag("digital"); Text("Performance").tag("performance")
@@ -231,5 +269,36 @@ struct FeedbackSettingsView: View {
         }
         .id(refresh)
         .navigationTitle("Haptics and sounds")
+    }
+}
+
+
+/// v4.1: the Pro theme pack, shown under the free presets.
+struct ProThemesSection: View {
+    @EnvironmentObject var themes: ThemeStore
+    @ObservedObject var store = StoreManager.shared
+    var body: some View {
+        Section(header: Text("Pro themes"), footer: Text(store.allows(.premiumThemes) ? "Part of Pro." : "Six extra looks with Pro. The presets above are free.")) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    ForEach(DashTheme.proPresets, id: \.name) { p in
+                        Button {
+                            if store.allows(.premiumThemes) { themes.theme = p }
+                        } label: {
+                            HStack(spacing: 4) {
+                                if !store.allows(.premiumThemes) { Image(systemName: "lock.fill").font(.caption2) }
+                                Text(p.name)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(Capsule().fill(Color(hex: p.accent).opacity(0.25)))
+                        }
+                        .disabled(!store.allows(.premiumThemes))
+                    }
+                }
+            }
+            if !store.allows(.premiumThemes) {
+                NavigationLink { PaywallView(highlight: .premiumThemes) } label: { Text("See Pro") }
+            }
+        }
     }
 }

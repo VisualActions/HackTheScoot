@@ -1,4 +1,4 @@
-# HackTheScoot (v4 beta)
+# HackTheScoot (v4.1 beta)
 
 An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Volpam**). Everything it does on the J078 was decoded from real Bluetooth captures of the 365 app on Nov 9 2026. Nothing is guessed silently: every feature below says how sure we are.
 
@@ -7,6 +7,41 @@ An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Vol
 Downloads:
 - Stable v3: https://github.com/VisualActions/HackTheScoot/releases/latest/download/J078-unsigned.ipa
 - v4 beta: https://github.com/VisualActions/HackTheScoot/releases/download/v4-beta/HackTheScoot-v4-beta-unsigned.ipa
+
+## What's new in 4.1 (beta)
+
+- **First-launch intro**: welcome, why Bluetooth, your scooter, find it, the four tabs. Skippable, shown once, More > Show the intro again.
+- **Garage** (More > Garage): every scooter you own with its own name, model, compatibility level, photo or color, notes, last-known stats and trips. Switch the active scooter and the app auto-connects to it. Starts with "My J078" and "Dad's Volpam".
+- **HackTheScoot Pro, TEST MODE**: FREE / PRO ($3.99/mo, $29.99/yr) / DEVELOPER (later). Details below.
+- Nothing from 4.0.1 was removed or capped.
+
+## HackTheScoot Pro (test mode)
+
+| FREE (always) | PRO $3.99/mo or $29.99/yr | DEVELOPER (later, not for sale) |
+|---|---|---|
+| Connecting, every control, speed limits incl. the above-stock 6-45 km/h sliders, fault warnings, safety info, compatibility info, Garage, dashboard themes + designer + layouts, trips + replay + summary export, diagnostics, Developer Lab, packet log, terminal | Pro theme pack (6 looks), advanced trip analytics (per scooter), CSV + GPX export, extended packet-log analysis | Frame compare workspace, JSON log export for fixtures |
+
+Rules (unit-tested): nothing that controls or protects the scooter is sold, nothing that was free before 4.1 moved behind the paywall, and there is **no paid speed unlock**.
+
+**How to test it**
+- **On the sideloaded beta (what you have):** More > Developer settings > **Test unlock** > Pro (test) or Developer (test). That turns the Pro screens on, on this phone, without paying. It's labelled TEST everywhere and never touches the scooter.
+- **Web checkout (Stripe TEST mode):** the download page has a "Get Pro (test)" section. Pay with **4242 4242 4242 4242**, any future date, any CVC, any ZIP. No real money moves. The links are made by the `Stripe test setup` workflow (`.github/workflows/stripe-test-setup.yml`) from the `STRIPE_SECRET_KEY` repo secret, which is never printed, committed or put in the app. The script refuses anything that isn't a `sk_test_` key.
+- **In Xcode:** the app scheme uses `Support/HackTheScoot.storekit`, a local StoreKit config with both subscriptions and a 1-week free trial, so purchase / restore / renew / expire can be tested on a simulator with no Apple account.
+
+**What an unsigned sideloaded IPA can't do (honest part)**
+- It can't buy anything from the App Store. Real StoreKit sandbox purchases need an Apple Developer account, the two products created in App Store Connect, and a signed build (TestFlight or Xcode with a team). Until then the paywall says "store unavailable" and Test unlock is the way to see Pro.
+- A Stripe web purchase can't unlock the app yet. That needs the small server from the billing plan (`docs/business/billing-plan.md`, phase 2: Supabase + verified webhooks) to tell the app who paid.
+- Apple's rules: in the app, subscriptions must be Apple in-app purchase. A Stripe link-out button is allowed only on the **US** storefront, next to IAP. The in-app "Get Pro on the web (test)" button only exists because this build is in test mode; before an App Store release it must be gated on `Storefront.current` = USA.
+
+### Going live (checklist, an adult must do these)
+Nothing is live today. Don't switch any of this on without a parent or guardian.
+1. **Apple:** a parent/guardian enrolls in the Apple Developer Program (you have to be 18, or the legal age of majority) and adds Credence to the team. Sign the Paid Apps Agreement, add tax and bank info. Enroll in the Small Business Program (15%).
+2. **App Store Connect:** create the subscription group "HackTheScoot Pro" with `com.hackthescoot.pro.monthly` ($3.99) and `com.hackthescoot.pro.yearly` ($29.99), the optional 1-week intro trial, screenshots and review notes. Set a real bundle id (not `com.example`).
+3. **Signed build:** archive with the team, test in the sandbox with a Sandbox Apple ID (buy, restore, cancel, expire), then TestFlight.
+4. **Hide Test unlock** in release builds (wrap `DeveloperSettingsView` in `#if DEBUG` or a TestFlight check) and set `Billing.testMode = false` only after review.
+5. **Stripe:** Stripe needs an adult as the account representative for anyone under 18. Activate the account (business details, bank, tax), then create a **live** key yourself. Never paste a live key into GitHub Actions for this repo's test workflow (it refuses live keys on purpose).
+6. **Server (if web purchases should unlock the app):** Supabase (or similar) with Sign in with Apple, Stripe webhooks verified with the `whsec_` signing secret, idempotent event handling, Customer Portal for cancel, refunds and failed payments revoke Pro, account deletion. App Store Server Notifications V2 for Apple.
+7. **Legal:** Privacy Policy, Terms, the App Store privacy label, and a review of `docs/legal/` by an adult (ideally a lawyer).
 
 ## What works on the J078 (evidence levels)
 
@@ -70,7 +105,8 @@ Features:
 - Battery, odometer, firmware version, fault codes on the J078: no evidence yet.
 - GPS route recording: the data model has room for it (`Trip.route`), but no location code ships in this beta (no location permission is asked).
 - LCD segment simulator is a generic 7-segment model, not the J078's real segment shapes.
-- Multi-brand: the adapter system is in (`ProtocolAdapters/`), but only the J078 and the Volpam have adapters. Other brands, the compatibility database, billing, onboarding and the Garage are separate work (see the research docs PR).
+- Multi-brand: the adapter system is in (`ProtocolAdapters/`), but only the J078 and the Volpam have adapters. The compatibility database seed is built in (Garage), the full searchable checker is next.
+- Billing is TEST MODE only (see below). No real money can move from this build.
 
 ## Code layout
 
@@ -88,9 +124,15 @@ J078/
     Theme.swift           DashTheme (JSON import/export), tiles, layouts
     Units.swift           unit conversion + SpeedInterpolator (never overshoots)
     CaptureTools.swift    offline decoder, capture compare, on-phone self-tests
+    Garage.swift          Garage rules (link / switch / per-scooter stats + trips)  (4.1)
+    CompatSeed.swift      research compatibility database seed                       (4.1)
+    Entitlements.swift    tiers, products, what Pro unlocks, never-paywalled rules   (4.1)
+    ProTools.swift        CSV/GPX export, ride analytics, log analysis, frame diff   (4.1)
   ProtocolAdapters/     capability model + adapters (Joyhis365, Zydtech/Volpam, GenericReadOnly)
   Transport/            BLEManager (CoreBluetooth), Keychain
-  Features/             Dashboard, Controls, Connect, Trips, Diagnostics, Customization, Startup, Feedback
+  Features/             Dashboard, Controls, Connect, Trips, Diagnostics, Customization, Startup, Feedback,
+                        Onboarding (4.1), Garage (4.1)
+  Premium/              StoreKit 2 StoreManager, paywall, ProGate, Pro tools, Developer settings (4.1)
   Research/             Developer Lab, LCD research
 Tests/                  XCTest (run on a simulator in CI before anything publishes)
 Support/                Info.plist, make_icon.py

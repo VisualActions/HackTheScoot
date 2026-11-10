@@ -17,7 +17,11 @@ struct J078App: App {
                 .environmentObject(themes)
                 .preferredColorScheme(themes.colorScheme)
                 .tint(themes.accent)
-                .onAppear { trips.attach(ble) }
+                .onAppear {
+                    trips.attach(ble)
+                    GarageStore.shared.attach(ble)
+                    trips.scooterID = { GarageStore.shared.activeID }
+                }
         }
     }
 }
@@ -43,6 +47,7 @@ struct RootView: View {
     @State private var showConnect = false
     @State private var choosing = (UserDefaults.standard.string(forKey: "chosenModel") ?? "").isEmpty
     @State private var showStartup = StartupSettings.enabled
+    @State private var showOnboarding = !Onboarding.done
 
     var body: some View {
         ZStack {
@@ -73,7 +78,16 @@ struct RootView: View {
             .environmentObject(themes)
             .preferredColorScheme(themes.colorScheme)
         }
-        .fullScreenCover(isPresented: Binding(get: { choosing && !showStartup }, set: { choosing = $0 })) {
+        .fullScreenCover(isPresented: Binding(get: { showOnboarding && !showStartup }, set: { showOnboarding = $0 })) {
+            OnboardingView(ble: ble, onFinish: {
+                showOnboarding = false
+                choosing = false
+            })
+            .environmentObject(themes)
+        }
+        .onAppear { if Onboarding.done { ble.startBluetooth() } }
+        .onReceive(NotificationCenter.default.publisher(for: .hackTheScootShowOnboarding)) { _ in showOnboarding = true }
+        .fullScreenCover(isPresented: Binding(get: { choosing && !showStartup && !showOnboarding }, set: { choosing = $0 })) {
             ChooseScooterView(onDone: {
                 choosing = false
                 showConnect = true
@@ -85,4 +99,10 @@ struct RootView: View {
             if p == .ready, showConnect, !ble.isSimulating { showConnect = false }
         }
     }
+}
+
+
+extension Notification.Name {
+    /// More › "Show the intro again".
+    static let hackTheScootShowOnboarding = Notification.Name("hackTheScootShowOnboarding")
 }

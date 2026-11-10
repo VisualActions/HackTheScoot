@@ -147,6 +147,10 @@ final class BLEManager: NSObject, ObservableObject {
     // MARK: Private
 
     private var central: CBCentralManager!
+    /// v4.1: called once a scooter's channels are set up (Garage links it).
+    var onConnected: ((UUID, String, ScooterKind) -> Void)?
+    /// v4.1: the Garage's active scooter's Bluetooth id, preferred by auto-connect.
+    var preferredScooterID: () -> UUID? = { nil }
     private var writeChar: CBCharacteristic?
     private var notifyChar: CBCharacteristic?
     private var f1f1Char: CBCharacteristic?
@@ -182,6 +186,19 @@ final class BLEManager: NSObject, ObservableObject {
         loadSaved()
         // v4.0.1: no CoreBluetooth state restoration (v3 had none). A restored peripheral
         // came back "connected" with no session started, so nothing worked.
+        // v4.1: on a brand-new install, Bluetooth starts when the onboarding asks for it
+        // (so iOS's permission prompt comes right after our explanation). Anyone who
+        // already answered the prompt starts exactly as 4.0.1 did, right here.
+        if BLEManager.permissionAnswered { startBluetooth() }
+    }
+
+    static var permissionAnswered: Bool { return CBManager.authorization != .notDetermined }
+
+    var bluetoothStarted: Bool { return central != nil }
+
+    /// Creates the central once. Safe to call any number of times.
+    func startBluetooth() {
+        guard central == nil else { return }
         central = CBCentralManager(delegate: self, queue: nil)
     }
 
@@ -247,6 +264,30 @@ final class BLEManager: NSObject, ObservableObject {
         savedScooters.removeAll { $0.id == p.identifier }
         savedScooters.insert(entry, at: 0)
         persistSaved()
+        onConnected?(p.identifier, connectedName, kind)
+    }
+
+    /// The Garage's active scooter when this phone knows it, else the last connected one.
+    func autoConnectTarget() -> SavedScooter? {
+        if let id = preferredScooterID(), let s = savedScooters.first(where: { $0.id == id }) { return s }
+        return savedScooters.first
+    }
+
+    /// v4.1 Garage: connect to the active scooter now (if it has connected on this phone before).
+    @discardableResult
+    func connectPreferred() -> Bool {
+        guard let id = preferredScooterID(), let s = savedScooters.first(where: { $0.id == id }) else { return false }
+        if connected?.identifier == id, phase.isLinked { return true }
+        guard isPoweredOn else { return false }
+        connectSaved(s)
+        return true
+    }
+
+    /// The packet log in the form the Pro analysis and developer export read.
+    var frameRecords: [FrameRecord] {
+        return log.filter { !$0.raw.isEmpty }.map {
+            FrameRecord(time: $0.time, direction: $0.kind.rawValue, channel: $0.channel, bytes: $0.decoded ?? $0.raw)
+        }
     }
 
     func forget(_ s: SavedScooter) {
@@ -268,6 +309,7 @@ final class BLEManager: NSObject, ObservableObject {
     // MARK: Scan
 
     func startScan() {
+        if central == nil { startBluetooth() }
         guard isPoweredOn else { info("Can't scan: \(bluetoothState)"); return }
         if isSimulating { stopSimulation() }
         devices.removeAll()
@@ -278,7 +320,7 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     func stopScan() {
-        if central.isScanning { central.stopScan() }
+        if let c = central, c.isScanning { c.stopScan() }
         if isScanning { info("Scan stopped") }
         isScanning = false
         if phase == .scanning { setPhase(.idle) }
@@ -979,8 +1021,9 @@ extension BLEManager: CBCentralManagerDelegate {
             if let p = connected, !userWantsDisconnect, p.state != .connected {
                 info("Bluetooth back on: reconnecting to \(connectedName)")
                 central.connect(p, options: nil)
-            } else if autoReconnect, connected == nil, !isSimulating, let last = savedScooters.first {
+            } else if autoReconnect, connected == nil, !isSimulating, let last = autoConnectTarget() {
                 // v3 behaviour: wait for the last scooter and connect as soon as it is in range.
+                // v4.1: the Garage's active scooter first, else the last one (as 4.0.1).
                 info("Auto-connect: waiting for \(last.name)")
                 connectSaved(last)
             }
