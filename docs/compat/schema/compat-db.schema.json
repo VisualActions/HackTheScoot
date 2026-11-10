@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/VisualActions/HackTheScoot/docs/compat/schema/compat-db.schema.json",
+  "title": "HackTheScoot compatibility database",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "db_version",
+    "generated",
+    "entries"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "db_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "semver of the data; bump minor for new entries, patch for fixes"
+    },
+    "generated": {
+      "type": "string",
+      "format": "date"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "verified_hardware",
+        "verified_capture",
+        "documented_public",
+        "unverified",
+        "unsupported",
+        "unknown"
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "ref",
+        "date"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "hts_hardware_test",
+            "own_capture",
+            "public_writeup",
+            "open_source_code",
+            "official_doc",
+            "official_app_listing",
+            "community_wiki",
+            "search_snippet",
+            "inference"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "description": "URL or repo path"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "license": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "feature": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "indexes into entry.evidence"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": [
+        "id",
+        "direction",
+        "status",
+        "writes_state"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "app_to_scooter",
+            "scooter_to_app"
+          ]
+        },
+        "writes_state": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "frame_template": {
+          "type": "string",
+          "description": "hex with [placeholders]; NEVER secrets"
+        },
+        "ack_template": {
+          "type": "string"
+        },
+        "verify_by": {
+          "type": "string",
+          "description": "how the reported state is checked after a write"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "speed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "factory_max_kmh": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "factory_source": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "observed_cap_kmh": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "what the scooter actually accepted in testing"
+        },
+        "observed_note": {
+          "type": "string"
+        },
+        "per_mode_kmh": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "manufacturer",
+        "model",
+        "compatibility_level",
+        "adapter",
+        "ble",
+        "telemetry",
+        "commands",
+        "factory_speed",
+        "region_limits",
+        "firmware_update_support",
+        "recovery",
+        "known_issues",
+        "evidence",
+        "last_verified",
+        "checker"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "manufacturer": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "model year or hardware revision"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "controller_manufacturer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "controller_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compatibility_level": {
+          "enum": [
+            "full",
+            "partial",
+            "diagnostics_only",
+            "experimental",
+            "unsupported"
+          ]
+        },
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "ProtocolAdapter id, e.g. joyhis365, zydtech365, ninebot, generic_readonly"
+        },
+        "write_policy": {
+          "enum": [
+            "verified_only",
+            "none"
+          ],
+          "default": "none"
+        },
+        "ble": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "advertised_names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "hints only; names can be spoofed"
+            },
+            "services": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "uuid"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "uuid": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "characteristics": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "uuid",
+                        "properties"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "uuid": {
+                          "type": "string"
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "enum": [
+                              "read",
+                              "write",
+                              "write_without_response",
+                              "notify",
+                              "indicate"
+                            ]
+                          }
+                        },
+                        "role": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "auth": {
+              "type": "string",
+              "description": "auth scheme name; never the password itself"
+            },
+            "encryption": {
+              "type": "string"
+            }
+          }
+        },
+        "firmware_tested": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "telemetry": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/feature"
+          }
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/command"
+          }
+        },
+        "factory_speed": {
+          "$ref": "#/$defs/speed"
+        },
+        "region_limits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "region"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "region": {
+                "type": "string"
+              },
+              "max_kmh": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "source": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "firmware_update_support": {
+          "enum": [
+            "none_in_hts",
+            "official_app_only",
+            "unknown"
+          ]
+        },
+        "recovery": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "available",
+                "unverified",
+                "none_known"
+              ]
+            },
+            "method": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "known_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "minItems": 1
+        },
+        "last_verified": {
+          "type": "string",
+          "format": "date"
+        },
+        "checker": {
+          "type": "object",
+          "description": "the public compatibility-checker card",
+          "required": [
+            "connection",
+            "live_speed",
+            "lights",
+            "modes",
+            "dashboard_customization",
+            "speed_configuration",
+            "firmware_modification",
+            "recovery_method"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "connection": {
+              "enum": [
+                "supported",
+                "partial",
+                "unknown"
+              ]
+            },
+            "live_speed": {
+              "enum": [
+                "verified",
+                "unverified"
+              ]
+            },
+            "lights": {
+              "enum": [
+                "verified",
+                "unverified"
+              ]
+            },
+            "modes": {
+              "enum": [
+                "verified",
+                "unverified"
+              ]
+            },
+            "dashboard_customization": {
+              "enum": [
+                "phone",
+                "factory_display",
+                "unsupported"
+              ]
+            },
+            "speed_configuration": {
+              "enum": [
+                "factory_settings",
+                "unsupported",
+                "research_only"
+              ]
+            },
+            "firmware_modification": {
+              "enum": [
+                "verified",
+                "unsupported",
+                "unknown"
+              ]
+            },
+            "recovery_method": {
+              "enum": [
+                "available",
+                "unverified"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
