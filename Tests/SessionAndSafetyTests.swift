@@ -271,7 +271,7 @@ final class ThemeTests: XCTestCase {
         var t = DashTheme(); t.accent = "#123456"; t.gauge = "classic"
         let d = t.exportJSON()!
         XCTAssertEqual(try? DashTheme.importJSON(d).get(), t)
-        let partial = #"{"accent":"#ABCDEF","gauge":"nope","tiles":["mode","bogus","mode"]}"#.data(using: .utf8)!
+        let partial = ##"{"accent":"#ABCDEF","gauge":"nope","tiles":["mode","bogus","mode"]}"##.data(using: .utf8)!
         let p = try! DashTheme.importJSON(partial).get()
         XCTAssertEqual(p.accent, "#ABCDEF")
         XCTAssertEqual(p.gauge, DashTheme().gauge)
