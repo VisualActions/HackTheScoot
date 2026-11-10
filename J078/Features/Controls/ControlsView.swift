@@ -147,8 +147,6 @@ struct ControlsView: View {
     }
 }
 
-}
-
 struct ModeGrid: View {
     @ObservedObject var ble: BLEManager
     @EnvironmentObject var themes: ThemeStore
