@@ -49,6 +49,9 @@ jobs:
       - name: Test report
         if: always()
         run: |
+          echo "::notice title=Test report::$(grep -E "Executed [0-9]+ tests" test.log | tail -1 | sed 's/^[[:space:]]*//')"
+          grep -E "Test Suite '.*' (passed|failed)" test.log | sed -E "s/^.*Test Suite '([^']+)' (passed|failed).*/\1 \2/" | sort -u | grep -v -E "^(All tests|Selected tests|J078Tests.xctest) " | head -40 > suites.txt || true
+          echo "::notice title=Test suites::$(sed ':a;N;$!ba;s/\n/%0A/g' suites.txt)"
           echo "## Test report" >> "$GITHUB_STEP_SUMMARY"
           grep -E "Executed [0-9]+ tests" test.log | tail -1 >> "$GITHUB_STEP_SUMMARY" || true
           grep -E "error:|failed" test.log | head -50 >> "$GITHUB_STEP_SUMMARY" || true
