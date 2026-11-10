@@ -136,11 +136,8 @@ struct StatusBytesPage: View {
                     row("Speed", String(format: "%.1f", s.speed) + " (scooter's unit)")
                     row("Gear", s.gear?.name ?? String(format: "unknown %02X", s.gearCode))
                     row("Flags", String(format: "%02X", s.flags) + " light \(s.light ? 1 : 0) park \(s.parked ? 1 : 0) start \(s.startModeBit ? 1 : 0) units \(s.unitsBit ? 1 : 0)")
-                    row("Battery?", s.batteryGuess.map { "\($0)" } ?? "--")
-                    row("Odo? bytes 23-26", Proto.hex(s.odometerBytes))
-                    if let le = s.odometerLE {
-                        row("Odo? as little-endian", "\(le)")
-                    }
+                    row("Byte 10 (battery? UNVERIFIED, raw)", s.byte10Raw.map { "\($0)" } ?? "--")
+                    row("Bytes 23-26 (odometer? UNVERIFIED, raw)", Proto.hex(s.bytes23to26Raw))
                     if let t = ble.lastStatusTime {
                         row("Last status", LogEntry.timeFormatter.string(from: t))
                     }
