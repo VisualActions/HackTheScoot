@@ -150,7 +150,8 @@ final class BLEManager: NSObject, ObservableObject {
     /// v4.1: called once a scooter's channels are set up (Garage links it).
     var onConnected: ((UUID, String, ScooterKind) -> Void)?
     /// v4.1: the Garage's active scooter's Bluetooth id, preferred by auto-connect.
-    var preferredScooterID: () -> UUID? = { nil }
+    /// (Before the Garage attaches it reads the id the Garage saved last time.)
+    var preferredScooterID: () -> UUID? = { UserDefaults.standard.string(forKey: "garage.activeBLEID").flatMap { UUID(uuidString: $0) } }
     private var writeChar: CBCharacteristic?
     private var notifyChar: CBCharacteristic?
     private var f1f1Char: CBCharacteristic?
