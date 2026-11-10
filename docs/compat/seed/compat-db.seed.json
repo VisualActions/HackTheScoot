@@ -1,0 +1,809 @@
+{
+  "schema_version": "1.0.0",
+  "db_version": "0.1.0",
+  "generated": "2026-11-09",
+  "entries": [
+    {
+      "id": "joyhis-j078",
+      "manufacturer": "Joyhis",
+      "model": "J078",
+      "revision": null,
+      "aliases": [
+        "365_scooter"
+      ],
+      "controller_manufacturer": null,
+      "controller_id": null,
+      "display_model": null,
+      "compatibility_level": "partial",
+      "adapter": "joyhis365",
+      "write_policy": "verified_only",
+      "ble": {
+        "advertised_names": [
+          "365_scooter"
+        ],
+        "services": [
+          {
+            "uuid": "6e400001-0000-1000-8000-00805f9b34fb",
+            "role": "control",
+            "characteristics": [
+              {
+                "uuid": "6e400002-0000-1000-8000-00805f9b34fb",
+                "properties": [
+                  "write"
+                ],
+                "role": "app_to_scooter"
+              },
+              {
+                "uuid": "6e400003-0000-1000-8000-00805f9b34fb",
+                "properties": [
+                  "notify"
+                ],
+                "role": "scooter_to_app"
+              }
+            ]
+          }
+        ],
+        "auth": "6-digit ASCII password check before park (reply DB EB CA CA FF = OK); no BLE bonding",
+        "encryption": "fixed per-byte scramble (+A4 ^29 +C7 ^3A ^7B +EB ^DE), not cryptographic"
+      },
+      "firmware_tested": [
+        "unknown (not readable yet)"
+      ],
+      "telemetry": {
+        "speed": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ]
+        },
+        "mode": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ]
+        },
+        "front_light": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ]
+        },
+        "park": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ]
+        },
+        "speed_limit": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ],
+          "note": "DB EB BA 2A [kmh] every ~500 ms"
+        },
+        "battery_percent": {
+          "status": "unverified",
+          "evidence": [
+            0
+          ],
+          "note": "byte10=0x64 guessed"
+        },
+        "odometer": {
+          "status": "unverified",
+          "evidence": [
+            0
+          ]
+        },
+        "units": {
+          "status": "unverified",
+          "evidence": [
+            0
+          ]
+        },
+        "start_mode": {
+          "status": "unverified",
+          "evidence": [
+            0
+          ]
+        }
+      },
+      "commands": [
+        {
+          "id": "light",
+          "description": "front light on/off",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "verified_capture",
+          "frame_template": "BD BE AB 00 [01|00] (scrambled)",
+          "verify_by": "status flags bit 0x02",
+          "evidence": [
+            0
+          ]
+        },
+        {
+          "id": "gear",
+          "description": "walk/eco/drive/sport",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "verified_capture",
+          "frame_template": "BD BE AB 05 [04 walk|01 eco|02 drive|03 sport] (scrambled)",
+          "verify_by": "status byte5 gear bits",
+          "evidence": [
+            0
+          ]
+        },
+        {
+          "id": "park",
+          "description": "park on/off, only after a verified password reply",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "verified_capture",
+          "frame_template": "BD BE AB 02 [01|00] (scrambled)",
+          "verify_by": "status flags bit 0x04",
+          "evidence": [
+            0
+          ]
+        },
+        {
+          "id": "speed_limit_sport",
+          "description": "sport speed limit",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "verified_capture",
+          "frame_template": "BD BE AB A2 [kmh] (scrambled)",
+          "ack_template": "DB EB BA A2 [kmh accepted]",
+          "verify_by": "ack value + periodic DB EB BA 2A [kmh]",
+          "evidence": [
+            0
+          ]
+        },
+        {
+          "id": "speed_limit_other_gears",
+          "description": "A0 eco / A1 drive / A3 walk",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "unverified",
+          "frame_template": "BD BE AB [A0|A1|A3] [kmh] (scrambled)",
+          "evidence": [
+            0
+          ]
+        },
+        {
+          "id": "units",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "unverified",
+          "frame_template": "BD BE AB 01 [00|01]",
+          "evidence": [
+            0
+          ]
+        },
+        {
+          "id": "start_mode",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "unverified",
+          "frame_template": "BD BE AB 07 [00|01]",
+          "evidence": [
+            0
+          ]
+        }
+      ],
+      "factory_speed": {
+        "factory_max_kmh": null,
+        "observed_cap_kmh": 31,
+        "observed_note": "15:23 capture: app sent 32 km/h, scooter acked 31 (clamped)",
+        "per_mode_kmh": {
+          "sport": 31
+        }
+      },
+      "region_limits": [],
+      "firmware_update_support": "none_in_hts",
+      "recovery": {
+        "status": "unverified"
+      },
+      "known_issues": [
+        "battery % and odometer bytes not confirmed",
+        "non-sport speed-limit gear bytes unconfirmed",
+        "the scramble is not security; anyone nearby can send commands"
+      ],
+      "evidence": [
+        {
+          "kind": "own_capture",
+          "ref": "Credence's J078, iOS sysdiagnose BLE logs 2026-11-09 (decode in private notes j078-map.md)",
+          "date": "2026-11-09"
+        }
+      ],
+      "last_verified": "2026-11-09",
+      "checker": {
+        "connection": "partial",
+        "live_speed": "verified",
+        "lights": "verified",
+        "modes": "verified",
+        "dashboard_customization": "phone",
+        "speed_configuration": "factory_settings",
+        "firmware_modification": "unsupported",
+        "recovery_method": "unverified"
+      }
+    },
+    {
+      "id": "volpam-dad",
+      "manufacturer": "VOLPAM",
+      "model": "VOLPAM (Credence's dad's unit; exact model UNVERIFIED)",
+      "revision": null,
+      "aliases": [],
+      "controller_manufacturer": null,
+      "controller_id": null,
+      "display_model": null,
+      "compatibility_level": "partial",
+      "adapter": "zydtech365",
+      "write_policy": "verified_only",
+      "ble": {
+        "advertised_names": [],
+        "services": [
+          {
+            "uuid": "f1f0",
+            "role": "control (UUID inferred from F1F1 char; service UUID UNVERIFIED for this unit)",
+            "characteristics": [
+              {
+                "uuid": "f1f1",
+                "properties": [
+                  "write"
+                ],
+                "role": "app_to_scooter"
+              }
+            ]
+          }
+        ],
+        "auth": "ASCII AT+PWD[6 digits] then 'OK' notify (value never stored here)",
+        "encryption": "none; CRC16-Modbus LE on frames"
+      },
+      "firmware_tested": [
+        "unknown"
+      ],
+      "telemetry": {
+        "heartbeat": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ]
+        },
+        "sport_limit_readout": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ],
+          "note": "5A FA \u2026 [sport km/h] frame"
+        },
+        "gear_limits": {
+          "status": "verified_capture",
+          "evidence": [
+            0
+          ],
+          "note": "AC 01 00 [walk][eco][drive][sport]"
+        },
+        "battery_percent": {
+          "status": "unverified",
+          "evidence": [
+            0
+          ]
+        },
+        "speed": {
+          "status": "unknown"
+        }
+      },
+      "commands": [
+        {
+          "id": "speed_limit_sport",
+          "description": "Modbus write, value = km/h x10",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "verified_capture",
+          "frame_template": "01 10 00 20 00 01 02 [hi] [lo] [crcLo] [crcHi]",
+          "verify_by": "5A FA sport byte",
+          "evidence": [
+            0,
+            1
+          ]
+        },
+        {
+          "id": "feature_flags",
+          "description": "lock/light/gear/units/start mode bits in AC 00 0A frame",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "unverified",
+          "frame_template": "AC 00 0A [flags] [walk] [eco] [drive] [sport] [crcLo] [crcHi]",
+          "evidence": [
+            0,
+            1
+          ]
+        }
+      ],
+      "factory_speed": {
+        "factory_max_kmh": null,
+        "observed_cap_kmh": 35,
+        "observed_note": "34.0 accepted, 35.7 clamped to 35, 37.3 declined (capture 17:44)",
+        "per_mode_kmh": {
+          "walk": 6,
+          "eco": 12,
+          "drive": 18,
+          "sport": 35
+        }
+      },
+      "region_limits": [],
+      "firmware_update_support": "none_in_hts",
+      "recovery": {
+        "status": "unverified"
+      },
+      "known_issues": [
+        "flag-bit meanings guessed from button order",
+        "nothing sent from HackTheScoot yet"
+      ],
+      "evidence": [
+        {
+          "kind": "own_capture",
+          "ref": "Credence's dad's VOLPAM, sysdiagnose 2026-11-09 17:46 (decode in private notes j078-map.md)",
+          "date": "2026-11-09"
+        },
+        {
+          "kind": "inference",
+          "ref": "v4 build task: CRC16-Modbus LE reproduced all 25 distinct captured frames byte-for-byte (2026-11-09)",
+          "date": "2026-11-09"
+        }
+      ],
+      "last_verified": "2026-11-09",
+      "checker": {
+        "connection": "partial",
+        "live_speed": "unverified",
+        "lights": "unverified",
+        "modes": "unverified",
+        "dashboard_customization": "phone",
+        "speed_configuration": "factory_settings",
+        "firmware_modification": "unsupported",
+        "recovery_method": "unverified"
+      }
+    },
+    {
+      "id": "hiboy-s2-pro",
+      "manufacturer": "Hiboy",
+      "model": "S2 Pro",
+      "revision": null,
+      "aliases": [],
+      "controller_manufacturer": null,
+      "controller_id": null,
+      "display_model": null,
+      "compatibility_level": "experimental",
+      "adapter": "zydtech365",
+      "write_policy": "none",
+      "ble": {
+        "advertised_names": [],
+        "services": [
+          {
+            "uuid": "f1f0",
+            "characteristics": [
+              {
+                "uuid": "f1f1",
+                "properties": [
+                  "write_without_response"
+                ],
+                "role": "app_to_scooter"
+              }
+            ]
+          }
+        ],
+        "auth": "ASCII AT+PWD[6 digits]",
+        "encryption": "none; CRC16/MODBUS LE"
+      },
+      "firmware_tested": [],
+      "telemetry": {
+        "speed": {
+          "status": "unknown"
+        }
+      },
+      "commands": [
+        {
+          "id": "speed_limit",
+          "direction": "app_to_scooter",
+          "writes_state": true,
+          "status": "documented_public",
+          "frame_template": "AB 00 0A [flags] 03 06 10 [limit] [crcLo] [crcHi]",
+          "evidence": [
+            0
+          ]
+        }
+      ],
+      "factory_speed": {
+        "factory_max_kmh": null,
+        "observed_cap_kmh": 30,
+        "observed_note": "writeup: firmware ignored values above ~30 km/h; limit byte reads as km/h even in mph mode"
+      },
+      "region_limits": [],
+      "firmware_update_support": "unknown",
+      "recovery": {
+        "status": "unverified"
+      },
+      "known_issues": [
+        "UNVERIFIED by us: no Hiboy captured yet"
+      ],
+      "evidence": [
+        {
+          "kind": "public_writeup",
+          "ref": "https://www.leeholmes.com/reverse-engineering-hiboy-btle-protocol/",
+          "date": "2026-11-09",
+          "note": "Lee Holmes, 2024-08-10, page read"
+        },
+        {
+          "kind": "official_app_listing",
+          "ref": "https://play.google.com/store/apps/details?id=com.zydtech.hiboys2",
+          "date": "2026-11-09",
+          "note": "package prefix shared with 365GO/AovoPro"
+        }
+      ],
+      "last_verified": "2026-11-09",
+      "checker": {
+        "connection": "unknown",
+        "live_speed": "unverified",
+        "lights": "unverified",
+        "modes": "unverified",
+        "dashboard_customization": "phone",
+        "speed_configuration": "research_only",
+        "firmware_modification": "unsupported",
+        "recovery_method": "unverified"
+      }
+    },
+    {
+      "id": "ninebot-max-g30",
+      "manufacturer": "Segway-Ninebot",
+      "model": "KickScooter Max G30",
+      "revision": null,
+      "aliases": [
+        "Max",
+        "G30P",
+        "G30D"
+      ],
+      "controller_manufacturer": "Segway-Ninebot",
+      "controller_id": "HW ID 36",
+      "display_model": null,
+      "compatibility_level": "experimental",
+      "adapter": "ninebot",
+      "write_policy": "none",
+      "ble": {
+        "advertised_names": [
+          "MAX*",
+          "Ninebot*"
+        ],
+        "services": [
+          {
+            "uuid": "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
+            "role": "Nordic UART (older)",
+            "characteristics": [
+              {
+                "uuid": "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
+                "properties": [
+                  "write"
+                ]
+              },
+              {
+                "uuid": "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
+                "properties": [
+                  "notify"
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "6e400001-0000-0000-006e-696e65626f74",
+            "role": "Ninebot custom (modern)",
+            "characteristics": [
+              {
+                "uuid": "6e400002-0000-0000-006e-696e65626f74",
+                "properties": [
+                  "write"
+                ]
+              },
+              {
+                "uuid": "6e400004-0000-0000-006e-696e65626f74",
+                "properties": [
+                  "notify"
+                ]
+              }
+            ]
+          }
+        ],
+        "auth": "0x5B/0x5C/0x5D pairing on BLE110/113/114 (power-button press)",
+        "encryption": "Ninebot crypto on 5A A5 frames"
+      },
+      "firmware_tested": [],
+      "telemetry": {
+        "speed": {
+          "status": "documented_public",
+          "evidence": [
+            0
+          ]
+        },
+        "battery_percent": {
+          "status": "documented_public",
+          "evidence": [
+            0
+          ]
+        },
+        "odometer": {
+          "status": "documented_public",
+          "evidence": [
+            0
+          ]
+        }
+      },
+      "commands": [],
+      "factory_speed": {
+        "factory_max_kmh": 30,
+        "factory_source": [
+          2
+        ],
+        "observed_cap_kmh": null,
+        "per_mode_kmh": {}
+      },
+      "region_limits": [
+        {
+          "region": "varies",
+          "max_kmh": null,
+          "source": [
+            2
+          ],
+          "note": "wiki lists 20/25/30 km/h variants"
+        }
+      ],
+      "firmware_update_support": "official_app_only",
+      "recovery": {
+        "status": "unverified"
+      },
+      "known_issues": [
+        "no hardware available to us",
+        "sources disagree on whether legacy unencrypted frames still work"
+      ],
+      "evidence": [
+        {
+          "kind": "official_doc",
+          "ref": "https://nootnooot.codeberg.page/segway-ninebot-ble/devices/",
+          "date": "2026-11-09",
+          "note": "unofficial RE doc of official app config, Apache-2.0",
+          "license": "Apache-2.0"
+        },
+        {
+          "kind": "open_source_code",
+          "ref": "https://github.com/scooterhacking/NinebotCrypto",
+          "date": "2026-11-09",
+          "note": "facts only",
+          "license": "AGPL-3.0"
+        },
+        {
+          "kind": "community_wiki",
+          "ref": "https://github.com/scooterhacking/wiki/blob/main/pages/nbmax.txt",
+          "date": "2026-11-09",
+          "license": "CC-BY-SA-4.0"
+        }
+      ],
+      "last_verified": "2026-11-09",
+      "checker": {
+        "connection": "unknown",
+        "live_speed": "unverified",
+        "lights": "unverified",
+        "modes": "unverified",
+        "dashboard_customization": "phone",
+        "speed_configuration": "research_only",
+        "firmware_modification": "unsupported",
+        "recovery_method": "unverified"
+      }
+    },
+    {
+      "id": "xiaomi-m365",
+      "manufacturer": "Xiaomi",
+      "model": "Mi Electric Scooter M365",
+      "revision": null,
+      "aliases": [
+        "M365"
+      ],
+      "controller_manufacturer": "Ninebot",
+      "controller_id": null,
+      "display_model": null,
+      "compatibility_level": "experimental",
+      "adapter": "ninebot",
+      "write_policy": "none",
+      "ble": {
+        "advertised_names": [
+          "MIScooter*"
+        ],
+        "services": [
+          {
+            "uuid": "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
+            "role": "Nordic UART (UNVERIFIED per unit)"
+          }
+        ],
+        "auth": "none on old BLE firmware; Xiaomi ECDH login (55 AB) on newer",
+        "encryption": "none / AES-CCM"
+      },
+      "firmware_tested": [],
+      "telemetry": {
+        "speed": {
+          "status": "documented_public",
+          "evidence": [
+            0
+          ]
+        }
+      },
+      "commands": [],
+      "factory_speed": {
+        "factory_max_kmh": 25,
+        "factory_source": [
+          1
+        ]
+      },
+      "region_limits": [],
+      "firmware_update_support": "official_app_only",
+      "recovery": {
+        "status": "unverified"
+      },
+      "known_issues": [
+        "auth depends on BLE firmware version"
+      ],
+      "evidence": [
+        {
+          "kind": "public_writeup",
+          "ref": "https://github.com/CamiAlfa/M365-BLE-PROTOCOL",
+          "date": "2026-11-09",
+          "note": "firmware 1.3.4",
+          "license": "LGPL-2.1+ (README)"
+        },
+        {
+          "kind": "community_wiki",
+          "ref": "https://github.com/scooterhacking/wiki/blob/main/pages/mi365.txt",
+          "date": "2026-11-09",
+          "license": "CC-BY-SA-4.0"
+        },
+        {
+          "kind": "public_writeup",
+          "ref": "https://github.com/dnandha/miauth/tree/main/doc",
+          "date": "2026-11-09",
+          "license": "AGPL-3.0 file / Apache-2.0 README (conflict)"
+        }
+      ],
+      "last_verified": "2026-11-09",
+      "checker": {
+        "connection": "unknown",
+        "live_speed": "unverified",
+        "lights": "unverified",
+        "modes": "unverified",
+        "dashboard_customization": "phone",
+        "speed_configuration": "research_only",
+        "firmware_modification": "unsupported",
+        "recovery_method": "unverified"
+      }
+    },
+    {
+      "id": "kukirin-g4",
+      "manufacturer": "KuKirin",
+      "model": "G4",
+      "revision": null,
+      "aliases": [],
+      "controller_manufacturer": null,
+      "controller_id": null,
+      "display_model": null,
+      "compatibility_level": "experimental",
+      "adapter": "generic_readonly",
+      "write_policy": "none",
+      "ble": {
+        "advertised_names": [],
+        "services": [
+          {
+            "uuid": "fff0 (UNVERIFIED)",
+            "characteristics": [
+              {
+                "uuid": "fff2",
+                "properties": [
+                  "notify"
+                ],
+                "role": "mode notifications"
+              }
+            ]
+          }
+        ]
+      },
+      "firmware_tested": [],
+      "telemetry": {
+        "mode": {
+          "status": "documented_public",
+          "evidence": [
+            0
+          ],
+          "note": "ECO/SPORT/RACE on one unit"
+        }
+      },
+      "commands": [],
+      "factory_speed": {
+        "factory_max_kmh": null
+      },
+      "region_limits": [],
+      "firmware_update_support": "unknown",
+      "recovery": {
+        "status": "unverified"
+      },
+      "known_issues": [
+        "maker says it has no official app and warns against unauthorized apps; writes stay off"
+      ],
+      "evidence": [
+        {
+          "kind": "open_source_code",
+          "ref": "https://github.com/maksdoner/Kukirin-G4-Bluetooth-Control",
+          "date": "2026-11-09",
+          "license": "MIT"
+        },
+        {
+          "kind": "search_snippet",
+          "ref": "https://www.kugooescooters.com/",
+          "date": "2026-11-09",
+          "note": "'KuKirin currently has no official app' warning"
+        }
+      ],
+      "last_verified": "2026-11-09",
+      "checker": {
+        "connection": "unknown",
+        "live_speed": "unverified",
+        "lights": "unverified",
+        "modes": "unverified",
+        "dashboard_customization": "phone",
+        "speed_configuration": "unsupported",
+        "firmware_modification": "unsupported",
+        "recovery_method": "unverified"
+      }
+    },
+    {
+      "id": "dualtron-ey4",
+      "manufacturer": "Minimotors",
+      "model": "Dualtron (EY3 Connect / EY4 / EYA display models)",
+      "revision": null,
+      "aliases": [],
+      "controller_manufacturer": "Minimotors",
+      "controller_id": null,
+      "display_model": "EY3 Connect / EY4 / EYA",
+      "compatibility_level": "unsupported",
+      "adapter": null,
+      "write_policy": "none",
+      "ble": {
+        "services": []
+      },
+      "firmware_tested": [],
+      "telemetry": {},
+      "commands": [],
+      "factory_speed": {
+        "factory_max_kmh": null
+      },
+      "region_limits": [],
+      "firmware_update_support": "unknown",
+      "recovery": {
+        "status": "unverified"
+      },
+      "known_issues": [
+        "no public protocol; only closed apps (Minimotors Dualtron, EyeX)"
+      ],
+      "evidence": [
+        {
+          "kind": "official_app_listing",
+          "ref": "https://eyex.app/en",
+          "date": "2026-11-09",
+          "note": "EyeX: 52 Dualtron/Rovoron models with Bluetooth display; closed source"
+        }
+      ],
+      "last_verified": "2026-11-09",
+      "checker": {
+        "connection": "unknown",
+        "live_speed": "unverified",
+        "lights": "unverified",
+        "modes": "unverified",
+        "dashboard_customization": "unsupported",
+        "speed_configuration": "unsupported",
+        "firmware_modification": "unknown",
+        "recovery_method": "unverified"
+      }
+    }
+  ]
+}
