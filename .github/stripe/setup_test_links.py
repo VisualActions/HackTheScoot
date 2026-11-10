@@ -78,32 +78,44 @@ def main():
     if not (KEY.startswith("sk_test_") or KEY.startswith("rk_test_")):
         fail("STRIPE_SECRET_KEY is not a TEST key (it must start with sk_test_). Refusing to touch live mode.")
 
-    # 1. product
-    found = call("GET", "/products/search", {"query": "metadata['hts_key']:'pro' AND active:'true'"})
-    if found.get("data"):
-        product = found["data"][0]
+    # 1. prices by lookup key (they decide which product is "the" Pro product)
+    lookups = [p["lookup"] for p in PLANS]
+    have = call("GET", "/prices", {"lookup_keys[]": lookups, "active": "true", "limit": "10"})
+    prices = {p["lookup_key"]: p for p in have.get("data", [])}
+    product_id = next((p["product"] for p in prices.values()), None)
+
+    # 2. product: reuse the prices' product, else one tagged hts_key=pro, else create it
+    if not product_id:
+        found = call("GET", "/products/search", {"query": "metadata['hts_key']:'pro' AND active:'true'"})
+        if found.get("data"):
+            product_id = found["data"][0]["id"]
+    if product_id:
+        product = call("GET", f"/products/{product_id}")
     else:
         product = call("POST", "/products", {
             "name": "HackTheScoot Pro (TEST)",
             "description": "Pro extras for HackTheScoot: Pro themes, trip analytics, CSV/GPX export, log analysis. Test mode.",
             "metadata[hts_key]": "pro",
             "tax_code": TAX_CODE,
-        }, idem=idem("product", "pro", TAX_CODE))
+        }, idem=idem("product", "pro", TAX_CODE, "v3"))
     if not product.get("tax_code"):
-        product = call("POST", f"/products/{product['id']}", {"tax_code": TAX_CODE}, idem=idem("product-tax", product["id"], TAX_CODE))
-    print(f"product {product['id']} (test mode)")
+        product = call("POST", f"/products/{product['id']}", {"tax_code": TAX_CODE})
+    print(f"product {product['id']} (test mode, tax code {product.get('tax_code')})")
 
-    # 2. prices by lookup key
-    lookups = [p["lookup"] for p in PLANS]
-    have = call("GET", "/prices", {"lookup_keys[]": lookups, "active": "true", "limit": "10"})
-    prices = {p["lookup_key"]: p for p in have.get("data", [])}
+    # tidy: archive any duplicate Pro product an earlier run left without prices
+    dupes = call("GET", "/products/search", {"query": "metadata['hts_key']:'pro' AND active:'true'"})
+    for d in dupes.get("data", []):
+        if d["id"] != product["id"]:
+            call("POST", f"/products/{d['id']}", {"active": "false"})
+            print(f"archived duplicate test product {d['id']}")
+
     for p in PLANS:
         if p["lookup"] not in prices:
             prices[p["lookup"]] = call("POST", "/prices", {
                 "product": product["id"], "currency": "usd", "unit_amount": str(p["amount"]),
                 "recurring[interval]": p["interval"], "lookup_key": p["lookup"],
                 "nickname": p["label"], "metadata[hts_key]": p["key"],
-            }, idem=idem("price", p["lookup"]))
+            }, idem=idem("price", p["lookup"], product["id"]))
         print(f"price {p['key']}: {prices[p['lookup']]['id']}")
 
     # 3. payment links (found by metadata)
