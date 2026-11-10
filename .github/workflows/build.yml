@@ -40,6 +40,10 @@ jobs:
             -derivedDataPath build-tests \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log | grep -E "Test Case|error:|Executed|TEST (SUCCEEDED|FAILED)" || true
           grep -q "TEST SUCCEEDED" test.log
+      - name: Errors as annotations
+        if: failure()
+        run: |
+          grep -E "(error:|XCTAssert.*failed|: error|failed \()" test.log | sort -u | head -45 | while IFS= read -r l; do echo "::error::${l//$'\n'/ }"; done || true
       - name: Test report
         if: always()
         run: |
@@ -93,7 +97,8 @@ jobs:
 
       - name: Show build errors
         if: failure()
-        run: grep -E "error:" build.log | head -80 || true
+        run: |
+          grep -E "error:" build.log | sort -u | head -45 | while IFS= read -r l; do echo "::error::$l"; done || true
 
       - name: Package Payload/ into an .ipa
         run: |
