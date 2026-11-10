@@ -15,6 +15,9 @@ import json, os, sys, urllib.parse, urllib.request, urllib.error, hashlib
 API = "https://api.stripe.com/v1"
 SITE = "https://j078-app.sites.tab.bot"
 KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+# Stripe needs a product tax code before a Payment Link can sell it.
+# txcd_10202000 = "Downloadable Software - personal use" (app extras).
+TAX_CODE = "txcd_10202000"
 
 PLANS = [
     {"key": "pro_monthly", "lookup": "hts_pro_monthly_test", "amount": 399, "interval": "month", "label": "Pro monthly ($3.99/mo)"},
@@ -84,7 +87,10 @@ def main():
             "name": "HackTheScoot Pro (TEST)",
             "description": "Pro extras for HackTheScoot: Pro themes, trip analytics, CSV/GPX export, log analysis. Test mode.",
             "metadata[hts_key]": "pro",
-        }, idem=idem("product", "pro"))
+            "tax_code": TAX_CODE,
+        }, idem=idem("product", "pro", TAX_CODE))
+    if not product.get("tax_code"):
+        product = call("POST", f"/products/{product['id']}", {"tax_code": TAX_CODE}, idem=idem("product-tax", product["id"], TAX_CODE))
     print(f"product {product['id']} (test mode)")
 
     # 2. prices by lookup key
