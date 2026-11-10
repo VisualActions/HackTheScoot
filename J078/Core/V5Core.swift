@@ -100,8 +100,30 @@ enum CaptureGuide {
         if !model.isEmpty { items.append(URLQueryItem(name: "model", value: String(model.prefix(80)))) }
         if !controller.isEmpty { items.append(URLQueryItem(name: "controller", value: String(controller.prefix(60)))) }
         if !vehicleType.isEmpty { items.append(URLQueryItem(name: "vehicle", value: vehicleType)) }
+        // GitHub reads issue templates from the default branch (main = v3 until PR #2 is merged),
+        // so until then the same questions ride in the body of a blank issue.
+        items.append(URLQueryItem(name: "body", value: issueBody(brand: brand, model: model, controller: controller, vehicleType: vehicleType)))
         c?.queryItems = items
         return c?.url
+    }
+
+    static func issueBody(brand: String = "", model: String = "", controller: String = "", vehicleType: String = "") -> String {
+        return """
+        **Brand:** \(brand)
+        **Model:** \(model)
+        **Vehicle type:** \(vehicleType)
+        **Controller (if known):** \(controller)
+        **Firmware (if known):**
+        **Official app + version:**
+        **How it was captured:** HackTheScoot packet logger / iPhone sysdiagnose
+
+        **What I pressed, in order (with times if you have them):**
+        1.
+
+        **Capture file:** (drag the .txt or .pklg here)
+
+        - [ ] I checked the file has no password, PIN or personal info in it (issues are public).
+        """
     }
 
     /// Service UUIDs used to find a vehicle that another app on this phone is already connected to.

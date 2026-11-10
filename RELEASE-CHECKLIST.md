@@ -14,7 +14,8 @@ Do this only after 5.0 has been tested on a real iPhone and the J078 (connect, s
 4. The push to `main` runs the same workflow. When it's green, it **replaces the `latest` release** with the 5.0 IPA (`HackTheScoot-unsigned.ipa`), and v3 stops being the stable download.
    - Want to keep v3 downloadable? Before merging, open Releases > `latest` and download its `.ipa`, or re-tag it: Releases > Draft a new release > tag `v3.0.0` on commit `b9b954d`, attach the old IPA.
 5. Update the download page (https://j078-app.sites.tab.bot/) so the big button points at `latest`, and move v3 to an "older versions" line.
-6. Optional: delete the old `v4-beta` prerelease (4.2) once nobody needs it.
+6. After the merge, GitHub shows the **New vehicle capture** issue form (it reads issue templates from `main` only). Until then the app's and the page's issue links open a plain issue with the same questions filled in.
+7. Optional: delete the old `v4-beta` prerelease (4.2) once nobody needs it.
 
 Rolling back: revert the merge commit on `main` (GitHub: the merged PR > Revert). The workflow republishes `latest` from the reverted code.
 
