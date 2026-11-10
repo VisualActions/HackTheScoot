@@ -49,7 +49,11 @@ jobs:
       - name: Test report
         if: always()
         run: |
-          echo "::notice title=Test report::$(grep -E "Executed [0-9]+ tests" test.log | tail -1 | sed 's/^[[:space:]]*//')"
+          PASSED=$(grep -cE "Test Case '.*' passed" test.log || true)
+          FAILED=$(grep -cE "Test Case '.*' failed" test.log || true)
+          echo "::notice title=Test report::${PASSED} test cases passed, ${FAILED} failed"
+          grep -E "Test Suite '[A-Za-z0-9]+\.xctest' (passed|failed)|Executed [0-9]+ test" test.log | sed 's/^[[:space:]]*//' > bundles.txt || true
+          echo "::notice title=Test bundles::$(sed ':a;N;$!ba;s/\n/%0A/g' bundles.txt)"
           grep -E "Test Suite '.*' (passed|failed)" test.log | sed -E "s/^.*Test Suite '([^']+)' (passed|failed).*/\1 \2/" | sort -u | grep -v -E "^(All tests|Selected tests|J078Tests.xctest) " | head -40 > suites.txt || true
           echo "::notice title=Test suites::$(sed ':a;N;$!ba;s/\n/%0A/g' suites.txt)"
           echo "## Test report" >> "$GITHUB_STEP_SUMMARY"
@@ -159,6 +163,6 @@ jobs:
           gh release create v4-beta HackTheScoot-v4-beta-unsigned.ipa \
             --target "$GITHUB_SHA" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "HackTheScoot v4 beta" \
-            --notes "Unsigned v4 BETA built from ${GITHUB_SHA::7} on v4-dev, after the unit tests passed. Experimental: see CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
+            --title "HackTheScoot 4.0.1 beta" \
+            --notes "Unsigned 4.0.1 BETA (build 5) built from ${GITHUB_SHA::7} on v4-dev, after the unit tests and the screen tests (every screen, Controls included) passed. Fixes the Controls crash, restores v3's Bluetooth timing and features. Not yet tested on a real scooter. See CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
             --prerelease --latest=false
