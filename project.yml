@@ -18,14 +18,15 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
-        MARKETING_VERSION: "4.0.0"
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "4.0.1"
+        CURRENT_PROJECT_VERSION: "5"
         ENABLE_BITCODE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     scheme:
       testTargets:
         - J078Tests
+        - J078ViewTests
   # Logic tests: compile the pure protocol / safety / trip code directly (no host app),
   # so they run fast on any simulator and never touch Bluetooth.
   J078Tests:
@@ -45,3 +46,22 @@ targets:
     scheme:
       testTargets:
         - J078Tests
+        - J078ViewTests
+  # Screen smoke tests: hosted in the app, they build and lay out every screen
+  # (Controls included) with a simulated scooter, so a crash on open fails CI.
+  J078ViewTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ViewTests
+    dependencies:
+      - target: J078
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.j078viewtests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: NO
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/J078.app/J078"
+        BUNDLE_LOADER: "$(TEST_HOST)"

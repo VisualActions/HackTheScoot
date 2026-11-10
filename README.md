@@ -18,12 +18,12 @@ Downloads:
 | Park on/off | **Verified** | cmd 02, flag 0x04. **v4 fix:** only sent after the scooter answers `DB EB CA CA FF` to the password |
 | Speed-limit readout per mode | **Verified** | `DB EB BA` = 6 / 12 / 18 / 31 km/h, confirmed by Credence |
 | Sport speed-limit write (6-31 km/h) | **Verified** | `BD BE AB A2 [kmh]` + ack; 32 km/h was clamped to 31 by the scooter |
-| Walk / eco / drive limit write | Experimental | same pattern (A3/A0/A1), never captured; needs a confirmation toggle |
+| Walk / eco / drive limit write | Experimental | same pattern (A3/A0/A1), never captured; sent on Set like v3, labelled experimental |
 | Units (mph/km/h), start mode (zero/kick) | Experimental | the flag bit follows the command, but which value is which is a guess; each send asks first; Swap switches in Settings |
 | Battery % | **Unavailable (unverified)** | byte 10 read 100 in every capture and never moved |
 | Odometer | **Unavailable (unverified)** | bytes 23-26 never changed |
 | Firmware version, fault codes, temperatures, voltage | Unsupported | never seen in any capture; not shown, not invented |
-| Above-stock speeds | **Removed in v4** | the v3 unlock is gone: sliders stop at the factory limit |
+| Above-stock speeds | **Back in v4.0.1** (v3 behaviour) | 6-45 km/h per mode after the one-time warning; the scooter clamps what it won't take and the app shows what it accepted (Nov 9: asked 32, kept 31) |
 | Stock LCD startup / firmware | Research only | nothing is sent; see Lab > LCD research |
 
 **Volpam (Zydtech family):** Partial. The CRC is CRC16-Modbus (low byte first) and it reproduces all 25 distinct frames the vendor app wrote, byte-for-byte (tests in `Tests/VolpamTests.swift`). Verified: sport speed-limit write (Modbus register 0x20, km/h x10), capped at the factory 35 km/h (37.3 was declined, 35.7 clamped to 35). Experimental (own page, confirm every send): lock, light, mode, units and start bits, which were lined up from button order only. The Bluetooth password is typed by you and kept in the iOS Keychain; it is never in the code, the log or this README. Hiboy S2 Pro and AovoPro/365GO reportedly use the same Zydtech protocol: **unverified**, they get read-only until someone captures one.
@@ -38,7 +38,7 @@ Reliability first:
 - All session timers live in one owner (`SessionTimers`): one timer per name (no duplicate heartbeats), all cancelled the moment the link drops, and a late tick from an old session is ignored.
 - Auto-reconnect with back-off (0.5, 1, 2, 4, 5 s...), and the `bluetooth-central` background mode + state restoration so a pending reconnect survives the phone locking (iOS still decides how long the app may run in the background).
 - One scooter at a time: connecting to a new one disconnects the old one, so two sessions can't send conflicting commands.
-- **Every** byte leaves through one gate (`WriteGuard`). Blocked: unknown frames, firmware / bootloader / identity characteristics, above-factory limits, anything while simulating or replaying. Experimental frames never go out automatically or from normal controls.
+- **Every** byte leaves through one gate (`WriteGuard`). Blocked: firmware / bootloader / identity characteristics, speed limits outside 6-45 km/h, anything while simulating or replaying. Experimental frames (above-stock limits, eco/drive/walk limits, terminal frames) go out only after your confirmation or the developer-mode warning, never automatically.
 - Incoming packets: length checked before any byte is read, malformed frames rejected and counted, the raw bytes are kept beside the decoded ones.
 - A BLE "write OK" is never treated as the scooter accepting a setting: the readouts change only from the scooter's own replies.
 

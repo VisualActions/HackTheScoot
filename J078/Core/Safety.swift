@@ -111,8 +111,11 @@ enum J078Safety {
             case 0xA0...0xA3:
                 if v == 0xFF { return .verified }                      // keep-alive
                 guard let g = Gear.fromLimitByte(cmd) else { return .blocked }
-                guard g.limitRange.contains(Int(v)) else { return .blocked } // above factory: never
-                return g.limitWriteVerified ? .verified : .experimental
+                guard g.fullRange.contains(Int(v)) else { return .blocked }   // outside 6...45: never
+                // Sport inside its stock range is the write seen in his capture. Above stock
+                // (v3's unlock) and the other modes go out only after the user confirmed.
+                if g.limitWriteVerified && g.limitRange.contains(Int(v)) { return .verified }
+                return .experimental
             default:
                 return .experimental
             }

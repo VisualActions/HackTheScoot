@@ -1,16 +1,26 @@
 import SwiftUI
 
+/// v4.0.1 Controls: everything v3 had (light, park, modes, start mode, units, speed
+/// limits with the above-stock warning) plus v4's Volpam controls. No crash paths:
+/// every slider goes through SafeSlider and every range is at least 1 km/h wide.
 struct ControlsView: View {
     @ObservedObject var ble: BLEManager
     @EnvironmentObject var themes: ThemeStore
     @State private var pin = Keychain.get("parkPIN") ?? "000000"
     @State private var volpamPin = ""
     @State private var volpamSaved = Keychain.get("volpamPassword") != nil
-    @State private var confirmExperimental = false
     @AppStorage(Keys.unitsSwapped) private var unitsSwapped = false
     @AppStorage(Keys.startSwapped) private var startSwapped = false
 
     private var moving: Bool { (ble.status?.speed ?? 0) > 2 }
+    private var startIsZero: Bool? {
+        guard let s = ble.status else { return nil }
+        return Mapping.startIsZero(flagBit: s.startModeBit, swapped: startSwapped)
+    }
+    private var isMile: Bool? {
+        guard let s = ble.status else { return nil }
+        return Mapping.unitsIsMile(flagBit: s.unitsBit, swapped: unitsSwapped)
+    }
 
     var body: some View {
         NavigationView {
@@ -19,25 +29,28 @@ struct ControlsView: View {
                     HStack {
                         ConnectionPill(ble: ble)
                         Spacer()
-                        Text(ble.adapter.displayName).font(.footnote).foregroundColor(.secondary)
+                        Text(ble.isActive ? ble.adapter.displayName : "No scooter").font(.footnote).foregroundColor(.secondary)
                     }
                     if moving {
-                        Label("You're moving. Controls are locked until you stop.", systemImage: "hand.raised.fill")
-                            .foregroundColor(.orange)
+                        Label("You're moving. Change settings when you stop.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote).foregroundColor(.orange)
                     }
                 }
                 switch ble.kind {
-                case .j078: j078Sections
                 case .volpam: volpamSections
+                case .j078: j078Sections
                 default:
-                    Section("Read-only") {
-                        Text(ble.isActive ? "This device isn't identified, so HackTheScoot only listens. Nothing is sent."
-                                          : "Connect a scooter, or start the simulator in Connect.")
-                            .foregroundColor(.secondary)
+                    if ble.isActive && !ble.isSimulating {
+                        Section("Read-only") {
+                            Text("This device isn't identified as a J078 or Volpam, so HackTheScoot only listens. If it is your J078, use More > Developer Lab > Treat as.")
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        j078Sections   // shown (disabled) so you can see what's there before connecting
                     }
                 }
             }
-            .disabled(moving)
+            .listStyle(.insetGrouped)
             .navigationTitle("Controls")
         }
         .navigationViewStyle(.stack)
@@ -46,54 +59,67 @@ struct ControlsView: View {
     // MARK: J078
 
     @ViewBuilder private var j078Sections: some View {
-        Section(header: Text("Verified controls"), footer: Text(ble.isSimulating ? "Simulator: taps change the simulated scooter. Nothing is sent over Bluetooth." : "Each tap sends one verified command. The state below is what the scooter reports back.")) {
-            Toggle("Front light", isOn: Binding(get: { ble.status?.light ?? false }, set: { ble.setLight($0) }))
-                .disabled(!ble.canControl)
-            Picker("Riding mode", selection: Binding(get: { ble.status?.gear ?? .eco }, set: { ble.setGear($0) })) {
-                ForEach(Gear.allCases) { g in Text(g.name).tag(g) }
+        if !ble.canControl {
+            Section {
+                Text(ble.isActive ? "Getting ready... controls unlock when the J078 session is up." : "Connect your J078 first (Dashboard > Connect), or run the simulator.")
+                    .font(.footnote).foregroundColor(.secondary)
             }
-            .pickerStyle(.segmented)
-            .disabled(!ble.canControl)
         }
-        Section(header: Text("Park"), footer: Text("v4: park is sent only after the scooter answers the password (DB EB CA CA FF). A timeout sends nothing. The PIN is kept in the iOS Keychain.")) {
-            SecureField("Park PIN (6 digits)", text: $pin)
+
+        Section(header: Text("Ride"), footer: Text(ble.isSimulating ? "Simulator: taps change the simulated scooter. Nothing is sent over Bluetooth." : "Each tap sends one command. The switches show what the scooter reports back.")) {
+            Toggle(isOn: Binding(get: { ble.status?.light ?? false }, set: { ble.setLight($0) })) {
+                Label("Front light", systemImage: "lightbulb.fill")
+            }
+            Toggle(isOn: Binding(get: { ble.status?.parked ?? false }, set: { ble.setPark($0, pin: pin) })) {
+                Label(ble.busy ?? "Park", systemImage: "parkingsign.circle.fill")
+            }
+            .disabled(ble.busy != nil || pin.count != 6)
+            ModeGrid(ble: ble)
+        }
+        .disabled(!ble.canControl)
+
+        Section(header: Text("Park password"), footer: Text("Park sends this password first, like the 365 app (000000 unless you changed it there). It only parks after the scooter answers OK. Kept in the iOS Keychain. Last reply: \(ble.passwordState)")) {
+            SecureField("6 digits", text: $pin)
                 .keyboardType(.numberPad)
                 .onChange(of: pin) { v in
                     let d = String(v.filter { $0.isNumber }.prefix(6))
                     if d != v { pin = d }
-                    Keychain.set(d, for: "parkPIN")
+                    if d.count == 6 { Keychain.set(d, for: "parkPIN") }
                 }
-            HStack {
-                Button("Park on") { ble.setPark(true, pin: pin) }.buttonStyle(.borderedProminent)
-                Button("Park off") { ble.setPark(false, pin: pin) }.buttonStyle(.bordered)
-                Spacer()
-                Text((ble.status?.parked ?? false) ? "Parked" : "Not parked").foregroundColor(.secondary)
-            }
-            .disabled(!ble.canControl || pin.count != 6 || ble.busy != nil)
-            Text("Password: \(ble.passwordState)").font(.footnote).foregroundColor(.secondary)
         }
-        Section(header: Text("Speed limit (factory range)"), footer: Text("The slider stops at the factory limit for each mode (sport 31 km/h / 19 mph). Above-stock was removed in v4. Sport is verified; walk, eco and drive use the same pattern but are experimental.")) {
-            ForEach(Gear.allCases.reversed()) { g in
-                LimitRow(ble: ble, gear: g, confirmExperimental: confirmExperimental)
-            }
-            Toggle("I understand walk/eco/drive limits are experimental", isOn: $confirmExperimental)
-                .font(.footnote)
-        }
-        Section(header: Text("Experimental"), footer: Text("These bits follow the commands, but which value means what is a guess from your captures. Each send asks first.")) {
-            ExperimentalButton(title: "Units: mph", detail: "cmd 01 = \(Mapping.unitsValue(mile: true, swapped: unitsSwapped))") {
-                ble.setUnits(value: Mapping.unitsValue(mile: true, swapped: unitsSwapped), label: "mph")
-            }
-            ExperimentalButton(title: "Units: km/h", detail: "cmd 01 = \(Mapping.unitsValue(mile: false, swapped: unitsSwapped))") {
-                ble.setUnits(value: Mapping.unitsValue(mile: false, swapped: unitsSwapped), label: "km/h")
-            }
-            ExperimentalButton(title: "Start: zero", detail: "cmd 07 = \(Mapping.startValue(zero: true, swapped: startSwapped))") {
-                ble.setStartMode(value: Mapping.startValue(zero: true, swapped: startSwapped), label: "zero start")
-            }
-            ExperimentalButton(title: "Start: kick / glide", detail: "cmd 07 = \(Mapping.startValue(zero: false, swapped: startSwapped))") {
-                ble.setStartMode(value: Mapping.startValue(zero: false, swapped: startSwapped), label: "glide start")
+
+        Section("Top speed per mode") {
+            TopSpeedsList(ble: ble)
+            NavigationLink { SpeedLimitsView(ble: ble) } label: {
+                Label("Set speed limits", systemImage: "speedometer")
             }
         }
-        .disabled(!ble.canControl)
+
+        Section(header: Text("Start mode"), footer: Text("UNVERIFIED which value is which. If the scooter does the opposite, flip Swap.")) {
+            HStack(spacing: 10) {
+                ChoiceButton(title: "Zero start", selected: startIsZero == true) {
+                    ble.setStartMode(value: Mapping.startValue(zero: true, swapped: startSwapped), label: "zero start")
+                }
+                ChoiceButton(title: "Kick start", selected: startIsZero == false) {
+                    ble.setStartMode(value: Mapping.startValue(zero: false, swapped: startSwapped), label: "glide start")
+                }
+            }
+            .disabled(!ble.canControl)
+            Toggle("Swap", isOn: $startSwapped)
+        }
+
+        Section(header: Text("Units"), footer: Text("UNVERIFIED, likely 01 = mph. Flip Swap if it comes out backwards.")) {
+            HStack(spacing: 10) {
+                ChoiceButton(title: "mph", selected: isMile == true) {
+                    ble.setUnits(value: Mapping.unitsValue(mile: true, swapped: unitsSwapped), label: "mph")
+                }
+                ChoiceButton(title: "km/h", selected: isMile == false) {
+                    ble.setUnits(value: Mapping.unitsValue(mile: false, swapped: unitsSwapped), label: "km/h")
+                }
+            }
+            .disabled(!ble.canControl)
+            Toggle("Swap", isOn: $unitsSwapped)
+        }
     }
 
     // MARK: Volpam
@@ -121,73 +147,188 @@ struct ControlsView: View {
     }
 }
 
-struct ExperimentalButton: View {
-    let title: String
-    let detail: String
-    let action: () -> Void
-    @State private var asking = false
+}
+
+struct ModeGrid: View {
+    @ObservedObject var ble: BLEManager
+    @EnvironmentObject var themes: ThemeStore
     var body: some View {
-        Button { asking = true } label: {
-            HStack {
-                Text(title)
-                Spacer()
-                Text(detail).font(.caption.monospaced()).foregroundColor(.secondary)
-                Text("EXP").font(.caption2.weight(.heavy)).foregroundColor(.orange)
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            ForEach(Gear.allCases) { g in
+                let on = ble.status?.gear == g
+                Button { ble.setGear(g) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: g.icon)
+                        Text(g.name).fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? themes.accent : Color.white.opacity(0.08)))
+                    .foregroundColor(on ? .white : .primary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(g.name) mode")
             }
         }
-        .confirmationDialog("Send this experimental command once?", isPresented: $asking, titleVisibility: .visible) {
-            Button("Send once", action: action)
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Which value means what is not proven yet. Watch the scooter and the status readout.")
+        .padding(.vertical, 4)
+    }
+}
+
+struct ChoiceButton: View {
+    @EnvironmentObject var themes: ThemeStore
+    let title: String
+    let selected: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(selected ? themes.accent : Color.white.opacity(0.08)))
+                .foregroundColor(selected ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct TopSpeedsList: View {
+    @ObservedObject var ble: BLEManager
+    var body: some View {
+        ForEach(Gear.allCases) { g in
+            let kmh = ble.limitsKmh[g] ?? g.capturedLimitKmh
+            HStack {
+                Image(systemName: g.icon).foregroundColor(.secondary).frame(width: 24)
+                Text(g.name)
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(Gear.mph(for: g, kmh: kmh)) mph · \(kmh) km/h").font(.body.monospacedDigit())
+                    Text(ble.limitsLive.contains(g) ? "live from scooter" : "from Nov 9 capture")
+                        .font(.caption2).foregroundColor(.secondary)
+                    if let seen = ble.topSeen[g], seen.isFinite, seen > 0 {
+                        Text("fastest seen now: " + String(format: "%.1f", seen)).font(.caption2).foregroundColor(.secondary)
+                    }
+                }
+            }
         }
     }
 }
 
-struct LimitRow: View {
+// MARK: - Speed limits (v3 screen, restored)
+
+enum SpeedLimitText {
+    static let warning = "Speeds above your scooter's normal limit may be declined by the scooter. Running too high can overheat or damage the motor, controller or battery, and is less safe. Wear a helmet. I understand."
+    static func both(_ kmh: Int, _ gear: Gear) -> String { "\(Gear.mph(for: gear, kmh: kmh)) mph · \(kmh) km/h" }
+}
+
+struct SpeedLimitsView: View {
     @ObservedObject var ble: BLEManager
+    @AppStorage(Keys.aboveStockAccepted) private var aboveStockAccepted = false
+    @State private var showWarning = false
+
+    var body: some View {
+        List {
+            Section {
+                Text("Pick a speed and tap Set. One command per tap, nothing automatic, no retries. Under each mode you see what the scooter actually accepted (its reply).")
+                    .font(.callout)
+                Text("Above stock may be refused: on Nov 9 the 365 app asked 32 km/h in Sport and the scooter answered 31.")
+                    .font(.caption).foregroundColor(.orange)
+                if !ble.canControl {
+                    Text(ble.isActive ? "Not a J078 session, so nothing is sent." : "Connect your J078 first.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+            Section(header: Text("Above stock")) {
+                if aboveStockAccepted {
+                    Label("Above-stock speeds unlocked (up to \(Gear.absoluteMaxKmh) km/h)", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Button("Lock back to stock") { aboveStockAccepted = false }
+                } else {
+                    Button { showWarning = true } label: { Label("Allow speeds above stock...", systemImage: "lock.open") }
+                    Text("Until you accept the warning, each slider stops at that mode's stock limit.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+            ForEach([Gear.sport, Gear.drive, Gear.eco, Gear.walk]) { g in
+                SpeedLimitRow(ble: ble, gear: g, aboveStock: aboveStockAccepted)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Speed limits")
+        .alert("Above your normal limit", isPresented: $showWarning) {
+            Button("I understand", role: .destructive) { aboveStockAccepted = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(SpeedLimitText.warning)
+        }
+    }
+}
+
+struct SpeedLimitRow: View {
+    @ObservedObject var ble: BLEManager
+    @EnvironmentObject var themes: ThemeStore
     let gear: Gear
-    let confirmExperimental: Bool
-    @State private var value: Double = 0
+    let aboveStock: Bool
+    @State private var want: Double = -1
     @State private var now = Date()
     private let tick = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
+    private var stock: Int { gear.capturedLimitKmh }
+    private var current: Int { ble.limitsKmh[gear] ?? stock }
+    private var range: ClosedRange<Int> { gear.sliderRange(aboveStock: aboveStock) }
+    private var wantKmh: Int {
+        let v = want < 0 ? current : safeInt(want)
+        return min(max(v, range.lowerBound), range.upperBound)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        Section {
             HStack {
+                Image(systemName: gear.icon).foregroundColor(.secondary)
                 Text(gear.name).font(.headline)
-                if !gear.limitWriteVerified { Text("EXPERIMENTAL").font(.caption2.weight(.heavy)).foregroundColor(.orange) }
                 Spacer()
-                Text("now: " + current).font(.footnote).foregroundColor(.secondary)
+                Text(gear.limitWriteVerified ? "verified" : "experimental")
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Capsule().fill(gear.limitWriteVerified ? Color.green.opacity(0.22) : Color.orange.opacity(0.22)))
             }
-            HStack {
-                Slider(value: $value, in: Double(gear.limitRange.lowerBound)...Double(gear.limitRange.upperBound), step: 1)
-                Text("\(Int(value)) km/h · \(Gear.mph(for: gear, kmh: Int(value))) mph").font(.caption.monospacedDigit()).frame(width: 118, alignment: .trailing)
+            Text("Scooter now: " + SpeedLimitText.both(current, gear) + (ble.limitsLive.contains(gear) ? " (live)" : " (Nov 9 capture)"))
+                .font(.caption.monospacedDigit()).foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(SpeedLimitText.both(wantKmh, gear))
+                        .font(.title3.bold().monospacedDigit())
+                        .foregroundColor(wantKmh > stock ? .orange : .primary)
+                    Spacer()
+                    Button("Set") { ble.setSpeedLimit(gear, kmh: wantKmh, experimentalConfirmed: true) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(themes.accent)
+                        .disabled(!ble.canControl)
+                }
+                SafeSlider(value: Binding(get: { Double(wantKmh) }, set: { want = $0 }),
+                           range: Double(range.lowerBound)...Double(range.upperBound), step: 1)
+                    .tint(themes.accent)
+                HStack {
+                    Text("\(range.lowerBound) km/h"); Spacer(); Text("stock \(stock)"); Spacer(); Text("\(range.upperBound) km/h")
+                }
+                .font(.caption2).foregroundColor(.secondary)
+                if wantKmh > stock {
+                    Text("Above stock: the scooter may refuse it.").font(.caption).foregroundColor(.orange)
+                }
             }
-            HStack {
-                Button("Set") { ble.setSpeedLimit(gear, kmh: Int(value), experimentalConfirmed: confirmExperimental) }
-                    .buttonStyle(.bordered)
-                    .disabled(!ble.canControl || (!gear.limitWriteVerified && !confirmExperimental))
-                Spacer()
-                Text(outcome.text).font(.caption).foregroundColor(outcomeColor).multilineTextAlignment(.trailing)
+            if ble.limitRequested[gear] != nil {
+                let o = LimitOutcome.evaluate(requested: ble.limitRequested[gear], acked: ble.limitAccepted[gear],
+                                              sentAt: ble.limitSentAt[gear], now: now)
+                Text(o.text).font(.callout.monospacedDigit()).foregroundColor(color(o))
+            }
+        } footer: {
+            if !gear.limitWriteVerified {
+                Text("Experimental: the \(gear.name) code (BD BE AB \(String(format: "%02X", gear.limitByte)) [km/h]) follows the pattern; only Sport (A2) was seen in your capture.")
             }
         }
-        .padding(.vertical, 4)
-        .onAppear { value = Double(min(gear.factoryMaxKmh, ble.limitsKmh[gear] ?? gear.capturedLimitKmh)) }
         .onReceive(tick) { now = $0 }
     }
 
-    private var current: String {
-        guard let k = ble.limitsKmh[gear] else { return "--" }
-        return ble.limitsLive.contains(gear) ? "\(k) km/h" : "\(k) km/h (not reported yet)"
-    }
-
-    private var outcome: LimitOutcome {
-        LimitOutcome.evaluate(requested: ble.limitRequested[gear], acked: ble.limitAccepted[gear], sentAt: ble.limitSentAt[gear], now: now)
-    }
-
-    private var outcomeColor: Color {
-        switch outcome {
+    private func color(_ o: LimitOutcome) -> Color {
+        switch o {
         case .accepted: return .green
         case .declined, .noAck: return .orange
         default: return .secondary

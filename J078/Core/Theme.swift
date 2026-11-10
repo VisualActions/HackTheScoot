@@ -5,11 +5,13 @@ import Foundation
 /// scooter names, passwords or ride history, on purpose: it is safe to share.
 struct DashTheme: Codable, Equatable {
     var name: String = "HackTheScoot"
-    var accent: String = "#00E5FF"
-    var background: String = "#05070B"
-    var backgroundStyle: String = "gradient"        // solid / gradient / black
-    var gauge: String = "performance"               // classic / digital / performance
-    var font: String = "rounded"                    // rounded / mono / normal
+    // v4.0.1 defaults: black, one accent, SF Pro, big digital speed. (v4.0.0 used a
+    // neon gradient that changed color with the mode; Credence called it ugly.)
+    var accent: String = "#0A84FF"
+    var background: String = "#000000"
+    var backgroundStyle: String = "black"           // solid / gradient / black
+    var gauge: String = "digital"                   // classic / digital / performance
+    var font: String = "normal"                     // rounded / mono / normal
     var appearance: String = "dark"                 // dark / light / system
     var walkColor: String = "#D9DCE1"               // muted white
     var ecoColor: String = "#2BD96B"                // green
@@ -19,7 +21,7 @@ struct DashTheme: Codable, Equatable {
     var units: String = "scooter"                   // scooter / mph / kmh
     var layout: String = "standard"                 // standard / minimal / focus
     var tiles: [String] = DashTile.defaultOrder.map { $0.rawValue }
-    var useModeColor: Bool = true
+    var useModeColor: Bool = false
     var night: Bool = false
 
     static let schemaVersion = 1

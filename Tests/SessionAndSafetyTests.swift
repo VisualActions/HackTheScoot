@@ -220,8 +220,8 @@ final class AdapterTests: XCTestCase {
         XCTAssertNotEqual(a.level, .full, "nothing is Full without hardware testing")
     }
 
-    func testNoAdapterAdvertisesAboveFactory() {
-        XCTAssertNil(Proto.setLimit(.sport, kmh: 32))
+    func testLimitCeilings() {
+        XCTAssertNil(Proto.setLimit(.sport, kmh: 46), "J078 ceiling is 45 km/h (v3 range)")
         XCTAssertNil(VolpamProto.speedLimitWrite(tenthsKmh: 351))
         XCTAssertNotNil(VolpamProto.speedLimitWrite(tenthsKmh: 350))
     }

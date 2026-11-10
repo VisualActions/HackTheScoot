@@ -109,11 +109,23 @@ enum Gear: Int, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// v4: the factory (stock) maximum is the ceiling for every speed-limit write.
-    /// Credence's v4 spec: "Keep speed limits within documented factory values."
-    /// The only documented values are the ones his scooter reported, so they are the caps.
+    /// The factory (stock) limit for this mode: what his scooter reported on Nov 9.
     /// (Nov 9 15:23: the 365 app asked sport = 32 and the scooter itself kept 31.)
     var factoryMaxKmh: Int { return capturedLimitKmh }
+
+    /// v4.0.1: the v3 above-stock range is back. Every mode can ask 6...45 km/h, but
+    /// anything above the stock limit needs the one-time warning (same gate as v3).
+    /// The scooter clamps what it won't take; the app shows what it actually accepted.
+    static let absoluteMinKmh = 6
+    static let absoluteMaxKmh = 45
+    var fullRange: ClosedRange<Int> { return Gear.absoluteMinKmh...Gear.absoluteMaxKmh }
+
+    /// Slider range for this mode: stock only, or 6...45 once above-stock is accepted.
+    /// Always at least 1 km/h wide (a zero-width SwiftUI Slider crashes, that was the v4.0.0 Controls crash).
+    func sliderRange(aboveStock: Bool) -> ClosedRange<Int> {
+        let top = aboveStock ? Gear.absoluteMaxKmh : max(factoryMaxKmh, Gear.absoluteMinKmh + 1)
+        return Gear.absoluteMinKmh...top
+    }
 
     /// Lowest limit the app will ask for. Walk is fixed at its factory 6 km/h.
     var minLimitKmh: Int {
@@ -352,10 +364,10 @@ enum Proto {
     }
 
     /// Speed-limit write (decoded form): BD BE AB [gear byte] [kmh]. VERIFIED for sport (A2).
-    /// v4: returns nil (nothing to send) when the value is outside the factory range.
-    /// There is no above-stock unlock any more.
+    /// Returns nil (nothing to send) outside 6...45 km/h. Above the stock limit is
+    /// allowed (v3 behaviour, behind the one-time warning in the UI); the scooter clamps it.
     static func setLimit(_ gear: Gear, kmh: Int) -> [UInt8]? {
-        guard gear.limitRange.contains(kmh) else { return nil }
+        guard gear.fullRange.contains(kmh) else { return nil }
         return [0xBD, 0xBE, 0xAB, gear.limitByte, UInt8(kmh)]
     }
 

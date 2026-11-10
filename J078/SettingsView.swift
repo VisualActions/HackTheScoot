@@ -1,7 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct SettingsView: View {
+/// v4.0.1 "More" tab: the scooter list, look, app extras and tools in one place.
+struct MoreView: View {
     @ObservedObject var ble: BLEManager
     @EnvironmentObject var themes: ThemeStore
     var chooseScooter: () -> Void
@@ -9,37 +10,71 @@ struct SettingsView: View {
     @AppStorage(Keys.soundOn) private var soundOn = true
     @AppStorage(Keys.unitsSwapped) private var unitsSwapped = false
     @AppStorage(Keys.startSwapped) private var startSwapped = false
+    @AppStorage(Keys.showDashControls) private var showDashControls = true
+    @AppStorage(Keys.gaugeMaxAuto) private var gaugeMaxAuto = true
+    @AppStorage(Keys.gaugeMax) private var gaugeMax = 30.0
 
     var body: some View {
         NavigationView {
-            Form {
+            List {
+                Section("Scooter") {
+                    NavigationLink { ConnectView(ble: ble) } label: {
+                        HStack {
+                            Label("Connect and my scooters", systemImage: "antenna.radiowaves.left.and.right")
+                            Spacer()
+                            Text(ble.isActive ? (ble.isSimulating ? "Simulator" : ble.connectedName) : "").foregroundColor(.secondary).lineLimit(1)
+                        }
+                    }
+                    Toggle(isOn: $ble.autoReconnect) { Label("Auto-connect", systemImage: "arrow.triangle.2.circlepath") }
+                    Button(action: chooseScooter) { Label("Choose scooter model", systemImage: "scooter") }
+                }
                 Section("Dashboard") {
-                    NavigationLink("Theme and colors") { ThemeEditorView() }
-                    NavigationLink("Dashboard designer") { DashboardDesignerView() }
-                    Toggle("Keep screen awake on the dashboard", isOn: $keepAwake)
+                    NavigationLink { ThemeEditorView() } label: { Label("Theme and colors", systemImage: "paintpalette") }
+                    NavigationLink { DashboardDesignerView() } label: { Label("Dashboard designer", systemImage: "square.grid.2x2") }
+                    Toggle(isOn: $showDashControls) { Label("Mode buttons on the dashboard", systemImage: "hand.tap") }
+                    Toggle(isOn: $keepAwake) { Label("Keep screen on", systemImage: "sun.max") }
+                    Toggle(isOn: $gaugeMaxAuto) { Label("Gauge max: auto", systemImage: "gauge") }
+                    if !gaugeMaxAuto {
+                        Stepper(value: $gaugeMax, in: 10...80, step: 5) { Text("Gauge max: \(safeInt(gaugeMax))") }
+                    }
                 }
                 Section("App") {
-                    NavigationLink("Startup Studio") { StartupStudioView() }
-                    NavigationLink("Haptics and sounds") { FeedbackSettingsView() }
-                    Toggle("Sound when a scooter connects", isOn: $soundOn)
-                }
-                Section("Tools") {
-                    NavigationLink("Diagnostics") { DiagnosticsView(ble: ble) }
-                    NavigationLink("Developer Lab") { DevLabView(ble: ble) }
-                    Button("Choose scooter model...", action: chooseScooter)
+                    NavigationLink { StartupStudioView() } label: { Label("Startup Studio", systemImage: "sparkles") }
+                    NavigationLink { FeedbackSettingsView() } label: { Label("Haptics and sounds", systemImage: "waveform") }
+                    Toggle(isOn: $soundOn) { Label("Sound when a scooter connects", systemImage: "speaker.wave.2") }
                 }
                 Section(header: Text("J078 unverified mappings"), footer: Text("If mph and km/h (or zero and kick start) come out backwards on your scooter, flip these.")) {
                     Toggle("Swap units value", isOn: $unitsSwapped)
                     Toggle("Swap start-mode value", isOn: $startSwapped)
                 }
+                Section("Tools") {
+                    NavigationLink { DiagnosticsView(ble: ble) } label: { Label("Diagnostics", systemImage: "stethoscope") }
+                    NavigationLink { DevLabView(ble: ble) } label: { Label("Developer Lab", systemImage: "terminal") }
+                    NavigationLink { LogPage(ble: ble) } label: { Label("Packet log", systemImage: "list.bullet.rectangle") }
+                }
                 Section(header: Text("About"), footer: Text("Trips, logs and settings stay on this phone unless you export them. Nothing is uploaded.")) {
-                    HStack { LogoView().frame(width: 44, height: 44); VStack(alignment: .leading) { Text("HackTheScoot").font(.headline); Text("v4 beta").foregroundColor(.secondary) } }
+                    HStack(spacing: 12) {
+                        LogoView().frame(width: 44, height: 44)
+                        VStack(alignment: .leading) {
+                            Text("HackTheScoot").font(.headline)
+                            Text("v\(AppInfo.version) beta").foregroundColor(.secondary)
+                        }
+                    }
                     NavigationLink("What works (evidence)") { EvidenceView() }
                 }
             }
-            .navigationTitle("Settings")
+            .listStyle(.insetGrouped)
+            .navigationTitle("More")
         }
         .navigationViewStyle(.stack)
+    }
+}
+
+enum AppInfo {
+    static var version: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "4"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        return b.isEmpty ? v : "\(v) (\(b))"
     }
 }
 

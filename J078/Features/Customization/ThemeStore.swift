@@ -5,7 +5,8 @@ final class ThemeStore: ObservableObject {
     @Published var theme: DashTheme { didSet { save() } }
     @Published var layouts: SavedLayouts { didSet { saveLayouts() } }
 
-    private let key = "dashTheme.v1"
+    // v2: the redesigned defaults apply once, over the v4.0.0 look.
+    private let key = "dashTheme.v2"
     private let layoutsKey = "dashLayouts.v1"
 
     init() {
@@ -14,8 +15,7 @@ final class ThemeStore: ObservableObject {
             theme = t
         } else {
             var t = DashTheme()
-            // carry the v3 settings over once
-            if let a = ud.string(forKey: Keys.speedColor), let h = DashTheme.validHex(a) { t.accent = h }
+            // carry the v3 unit / font choices over once (not the old colors)
             if let u = ud.string(forKey: Keys.displayUnit), ["scooter", "mph", "kmh"].contains(u) { t.units = u }
             if let f = ud.string(forKey: Keys.fontDesign), ["rounded", "mono", "normal"].contains(f) { t.font = f }
             theme = t

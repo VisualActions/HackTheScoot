@@ -1,96 +1,108 @@
 import SwiftUI
 
+/// v4.0.1 dashboard: black, one huge readable speed, the mode, three numbers, and the
+/// two buttons you actually use (mode + light). Everything else lives in Controls / More.
 struct DashboardView: View {
     @ObservedObject var ble: BLEManager
     @ObservedObject var trips: TripManager
     @EnvironmentObject var themes: ThemeStore
-    var goToConnect: () -> Void
+    var openConnect: () -> Void
     @StateObject private var driver = GaugeDriver()
     @AppStorage(Keys.unitsSwapped) private var unitsSwapped = false
     @AppStorage(Keys.keepAwake) private var keepAwake = true
-    @AppStorage("modeHaptics") private var modeHaptics = true
-    @State private var sweep = 0
-    @State private var lastGear: Gear?
+    @AppStorage(Keys.showDashControls) private var showDashControls = true
+    @AppStorage(Keys.gaugeMaxAuto) private var gaugeMaxAuto = true
+    @AppStorage(Keys.gaugeMax) private var gaugeMax = 30.0
 
     private var theme: DashTheme { themes.theme }
+    private var gear: Gear? { ble.status?.gear }
+    private var modeColor: Color { themes.modeColor(gear) }
     private var scooterMile: Bool {
         guard let s = ble.status else { return true }
         return Mapping.unitsIsMile(flagBit: s.unitsBit, swapped: unitsSwapped)
     }
-    private var gear: Gear? { ble.status?.gear }
-    private var modeColor: Color { themes.modeColor(gear) }
-
     private func display(_ raw: Double) -> SpeedDisplay {
-        SpeedDisplay.make(raw: raw, scooterIsMile: scooterMile, display: theme.units)
+        SpeedDisplay.make(raw: raw.isFinite ? raw : 0, scooterIsMile: scooterMile, display: theme.units)
     }
-
     private var maxScale: Double {
+        if !gaugeMaxAuto, gaugeMax.isFinite, gaugeMax >= 5 { return gaugeMax }
         let kmh = Double(ble.adapter.factoryMaxKmh ?? 31)
-        let unitIsMile = display(0).isMile
-        let v = unitIsMile ? Units.kmhToMph(kmh) : kmh
-        return (v / 5).rounded(.up) * 5 + 5
+        let v = display(0).isMile ? Units.kmhToMph(kmh) : kmh
+        return max(10, (v / 5).rounded(.up) * 5 + 5)
     }
+    private var moving: Bool { (ble.status?.speed ?? 0) > 2 }
 
     var body: some View {
         GeometryReader { geo in
             let landscape = geo.size.width > geo.size.height
             ZStack {
                 background.ignoresSafeArea()
-                ModeSweep(color: modeColor, trigger: sweep).ignoresSafeArea()
                 if landscape {
-                    HStack(spacing: 16) {
-                        gauge.frame(width: geo.size.width * 0.58)
-                        VStack(spacing: 10) {
-                            header
-                            tileGrid(columns: 2, compact: true)
+                    HStack(spacing: DS.pad) {
+                        gauge.frame(width: geo.size.width * 0.55)
+                        VStack(spacing: DS.gap) {
+                            topBar
+                            modeLine
+                            stats
                             Spacer(minLength: 0)
                         }
                     }
-                    .padding(12)
+                    .padding(DS.pad)
                 } else {
-                    VStack(spacing: 12) {
-                        header
-                        gauge.frame(height: min(geo.size.width, geo.size.height * 0.5))
-                        if theme.layout != "focus" { tileGrid(columns: 2, compact: false) }
-                        if ble.isActive && theme.layout == "standard" { quickControls }
-                        Spacer(minLength: 0)
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: DS.pad) {
+                            topBar
+                            gauge.frame(height: min(geo.size.width * 0.95, 380))
+                            modeLine
+                            if ble.isActive {
+                                if theme.layout != "focus" { stats }
+                                if showDashControls && theme.layout == "standard" { quickControls }
+                            } else {
+                                connectCard
+                            }
+                        }
+                        .padding(.horizontal, DS.pad)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.horizontal, 16).padding(.top, 8)
                 }
             }
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepAwake }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
-        .onChange(of: ble.status?.gearCode) { _ in
-            guard let g = gear, g != lastGear else { return }
-            if lastGear != nil, theme.animationIntensity > 0, !theme.night { sweep += 1 }
-            lastGear = g
-        }
     }
 
     @ViewBuilder private var background: some View {
         switch theme.backgroundStyle {
-        case "black": Color.black
         case "solid": themes.background
-        default:
-            LinearGradient(colors: [themes.background, modeColor.opacity(theme.night ? 0.05 : 0.18), themes.background],
+        case "gradient":
+            LinearGradient(colors: [themes.background, modeColor.opacity(theme.night ? 0.04 : 0.10), Color.black],
                            startPoint: .top, endPoint: .bottom)
-                .animation(.easeInOut(duration: 0.6), value: gear)
+        default: Color.black
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            ConnectionPill(ble: ble)
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            Button(action: openConnect) {
+                HStack(spacing: 8) {
+                    ConnectionPill(ble: ble)
+                    if ble.isActive {
+                        Text(ble.isSimulating ? "SIMULATED" : (ble.connectedName.isEmpty ? ble.adapter.displayName : ble.connectedName))
+                            .font(.footnote.weight(.medium))
+                            .foregroundColor(ble.isSimulating ? .purple : DS.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
             Spacer()
-            if ble.isActive {
-                Text(ble.adapter.level.rawValue)
-                    .font(.caption2.weight(.bold))
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Capsule().stroke(Color.secondary.opacity(0.5)))
-                    .foregroundColor(.secondary)
-            } else {
-                Button("Connect", action: goToConnect).buttonStyle(.borderedProminent).tint(themes.accent)
+            if let s = ble.status {
+                Image(systemName: s.light ? "lightbulb.fill" : "lightbulb")
+                    .foregroundColor(s.light ? themes.accent : DS.tertiaryText)
+                if s.parked {
+                    Image(systemName: "parkingsign.circle.fill").foregroundColor(.orange)
+                }
             }
         }
     }
@@ -98,20 +110,100 @@ struct DashboardView: View {
     private var gauge: some View {
         TimelineView(.animation(minimumInterval: theme.night ? 0.25 : 1.0 / 30.0)) { ctx in
             let raw = ble.status?.speed ?? 0
-            let _ = driver.feed(raw, at: ble.lastStatusTime)
+            let _ = driver.feed(raw.isFinite ? raw : 0, at: ble.lastStatusTime)
             let v = driver.value(at: ctx.date, intensity: theme.night ? 0 : theme.animationIntensity)
             let stale = ble.status == nil || driver.isStale(ctx.date)
             let d = display(v)
-            AnyGauge(style: theme.gauge, m: GaugeModel(speed: d.value, maxSpeed: maxScale, unit: d.unit, color: modeColor,
-                                                       accent: themes.accent, font: themes.font, stale: stale,
-                                                       simulated: ble.isSimulating, intensity: theme.animationIntensity, night: theme.night))
+            AnyGauge(style: theme.gauge,
+                     m: GaugeModel(speed: d.value.isFinite ? d.value : 0, maxSpeed: maxScale, unit: d.unit,
+                                   color: themes.modeColor(gear), accent: themes.accent, font: themes.font,
+                                   stale: stale, simulated: ble.isSimulating,
+                                   intensity: theme.animationIntensity, night: theme.night))
+        }
+        .accessibilityLabel("Speedometer")
+    }
+
+    private var modeLine: some View {
+        HStack(spacing: 8) {
+            Circle().fill(gear.map { Color(hex: theme.modeColor($0)) } ?? DS.tertiaryText).frame(width: 8, height: 8)
+            Text(modeText).font(.title3.weight(.semibold))
+            if let g = gear, let k = ble.limitsKmh[g] {
+                Text("· max " + (display(0).isMile ? "\(Gear.mph(for: g, kmh: k)) mph" : "\(k) km/h"))
+                    .font(.subheadline).foregroundColor(DS.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var modeText: String {
+        if let g = gear { return g.name.uppercased() }
+        if let m = ble.volpamStatus?.mode { return m.name.uppercased() }
+        return ble.isActive ? "WAITING FOR DATA" : "NOT CONNECTED"
+    }
+
+    /// Three numbers in one card (the first three tiles of the chosen layout).
+    private var stats: some View {
+        let tiles = Array(theme.tiles.compactMap { DashTile(rawValue: $0) }.filter { $0 != .mode }.prefix(3))
+        return Card {
+            HStack(spacing: DS.gap) {
+                ForEach(tiles) { t in StatCell(title: t.title, value: tileValue(t)) }
+            }
         }
     }
 
-    private func tileGrid(columns: Int, compact: Bool) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: columns), spacing: 10) {
-            ForEach(theme.tiles.compactMap { DashTile(rawValue: $0) }) { t in
-                InfoTile(title: t.title, value: tileValue(t), color: t == .mode ? modeColor : .primary, compact: compact)
+    private var quickControls: some View {
+        VStack(spacing: DS.gap) {
+            if moving {
+                Label("Moving: keep your eyes on the road", systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote).foregroundColor(.orange)
+            }
+            HStack(spacing: 8) {
+                ForEach(Gear.allCases) { g in
+                    Button { ble.setGear(g) } label: {
+                        Text(g.name)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(gear == g ? themes.accent : DS.card))
+                            .foregroundColor(gear == g ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Switch to \(g.name)")
+                }
+                Button { ble.setLight(!(ble.status?.light ?? false)) } label: {
+                    Image(systemName: (ble.status?.light ?? false) ? "lightbulb.fill" : "lightbulb")
+                        .font(.headline)
+                        .frame(width: 52, height: 48)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DS.card))
+                        .foregroundColor((ble.status?.light ?? false) ? themes.accent : .primary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Toggle light")
+            }
+            .disabled(!ble.canControl)
+            .opacity(ble.canControl ? 1 : 0.4)
+            if ble.isActive && !ble.canControl && !ble.isSimulating {
+                Text(ble.kind == .j078 ? "Getting ready..." : "This scooter is read-only here. See Controls.")
+                    .font(.footnote).foregroundColor(DS.secondaryText)
+            }
+        }
+    }
+
+    private var connectCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: DS.gap) {
+                Text("Connect your scooter").font(.headline)
+                Text("Turn the scooter on, keep the phone close, and tap Connect.")
+                    .font(.subheadline).foregroundColor(DS.secondaryText)
+                Button(action: openConnect) {
+                    Text("Connect").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(themes.accent)
+                Button { ble.startSimulation(.cityRide) } label: {
+                    Text("Try the simulator").frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(.bordered)
             }
         }
     }
@@ -130,99 +222,19 @@ struct DashboardView: View {
         case .distance:
             guard let c = trips.current else { return "--" }
             let km = c.stats.distanceKm
-            return display(0).isMile ? String(format: "%.2f mi est.", Units.kmToMiles(km)) : String(format: "%.2f km est.", km)
+            return display(0).isMile ? String(format: "%.2f mi", Units.kmToMiles(km)) : String(format: "%.2f km", km)
         case .avg:
             guard let c = trips.current else { return "--" }
             let a = c.stats.avgMovingKmh
             return display(0).isMile ? String(format: "%.1f mph", Units.kmhToMph(a)) : String(format: "%.1f km/h", a)
         case .lightPark:
             guard let s = ble.status else { return "--" }
-            return "\(s.light ? "Light on" : "Light off") / \(s.parked ? "Parked" : "Ride")"
+            return "\(s.light ? "On" : "Off") / \(s.parked ? "P" : "Ride")"
         case .signal:
             if ble.isSimulating { return "Simulated" }
-            return SignalStrength.from(rssi: ble.rssi).rawValue + (ble.rssi.map { " (\($0) dBm)" } ?? "")
-        case .battery: return "Unavailable (unverified)"
-        case .odometer: return "Unavailable (unverified)"
+            return SignalStrength.from(rssi: ble.rssi).rawValue
+        case .battery: return "N/A"
+        case .odometer: return "N/A"
         }
-    }
-
-    private var moving: Bool { (ble.status?.speed ?? 0) > 2 }
-
-    @ViewBuilder private var quickControls: some View {
-        if moving {
-            Label("Controls hidden while moving", systemImage: "hand.raised.fill")
-                .font(.footnote).foregroundColor(.secondary)
-        } else if ble.canControl {
-            HStack(spacing: 8) {
-                ForEach(Gear.allCases) { g in
-                    Button { ble.setGear(g) } label: {
-                        Text(g.name).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(gear == g ? themes.modeColor(g).opacity(0.85) : Color.secondary.opacity(0.15)))
-                            .foregroundColor(gear == g ? .black : .primary)
-                    }
-                    .accessibilityLabel("Switch to \(g.name)")
-                }
-                Button { ble.setLight(!(ble.status?.light ?? false)) } label: {
-                    Image(systemName: (ble.status?.light ?? false) ? "lightbulb.fill" : "lightbulb")
-                        .frame(width: 44, height: 40)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.15)))
-                }
-                .accessibilityLabel("Toggle light")
-            }
-        }
-    }
-}
-
-struct InfoTile: View {
-    let title: String
-    let value: String
-    var color: Color = .primary
-    var compact = false
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased()).font(.caption2.weight(.semibold)).foregroundColor(.secondary)
-            Text(value).font(compact ? .headline : .title3.weight(.semibold)).foregroundColor(color)
-                .lineLimit(1).minimumScaleFactor(0.6)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.secondary.opacity(0.12)))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-struct ConnectionPill: View {
-    @ObservedObject var ble: BLEManager
-    var color: Color {
-        switch ble.phase {
-        case .ready: return ble.isSimulating ? .purple : .green
-        case .synchronizing, .subscribing, .discovering, .connecting, .authenticating: return .yellow
-        case .reconnecting: return .orange
-        default: return .gray
-        }
-    }
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(ble.isSimulating ? "Simulator · \(ble.phase.label)" : ble.phase.label).font(.caption.weight(.semibold)).lineLimit(1)
-            if !ble.isSimulating, ble.phase.isLinked { SignalBars(bars: SignalStrength.from(rssi: ble.rssi).bars) }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Capsule().fill(Color.secondary.opacity(0.15)))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-struct SignalBars: View {
-    let bars: Int
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 2) {
-            ForEach(1...4, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(i <= bars ? Color.primary : Color.secondary.opacity(0.3))
-                    .frame(width: 3, height: CGFloat(3 + i * 3))
-            }
-        }
-        .accessibilityLabel("Signal \(bars) of 4")
     }
 }

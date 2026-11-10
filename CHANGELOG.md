@@ -1,5 +1,33 @@
 # Changelog
 
+## 4.0.1 beta (build 5): crash fixes, v3 Bluetooth timing, features back, new UI
+
+Untested on hardware yet: built and tested in CI (simulator), not on a real J078.
+
+### What crashed in 4.0.0, and the fixes
+- **Opening Controls crashed.** The Walk speed-limit slider was built with a 6...6 km/h range (stock min = stock max). A SwiftUI `Slider` with equal bounds crashes. v3 had guarded this (`max(top, min + 1)`); v4.0.0 dropped the guard. Every slider now goes through `SafeSlider`, and `Gear.sliderRange` is never zero-width (unit test).
+- **Number conversions** that could trap on NaN/infinity (`Int(Double)` in the gauges) now use `safeInt`.
+- **New CI screen tests** (`ViewTests/ScreenSmokeTests.swift`, hosted in the app): every tab (Dashboard, Controls, Trips, More), every speed-limit row (stock + above-stock), every gauge and preset, the Volpam/unknown Controls, and every More screen are built and laid out with a simulated scooter. A crash on open now fails CI before anything publishes.
+
+### "Bluetooth connected but not working"
+4.0.0 put new gates in front of every write that v3 never had:
+- it waited for iOS to confirm the notification subscription, and after 5 s showed "disconnected" (while still connected) and sent nothing;
+- it only set up the channels once every service had characteristics, so one service that failed discovery left it stuck;
+- it turned on CoreBluetooth state restoration, which can hand back a "connected" scooter with no session started;
+- auto-connect to the last scooter on launch was gone.
+
+4.0.1 sends exactly what v3 sent, in the same order and timing: notifications on as each characteristic is found, then hello (`BD BE AF FF FF`) + `AC CC CC` right away, keep-alive every 500 ms (echoing the current gear), hello every 3 s, `AC CC CC` every 20 s, commands on tap. Detection falls back to v3's (16-bit-base `6E400001` service or the `365_scooter` name), and a device with `6E400002/6E400003` that isn't identified switches to the J078 path when a real J078 status frame arrives. The park fix stays: park only after the scooter answers `DB EB CA CA FF`.
+
+### Features back from v3
+- **Above-stock speed limits**: 6-45 km/h per mode, behind the same one-time warning v3 used. The scooter's own clamp and the requested-vs-accepted readout stay (Nov 9: asked 32, scooter kept 31).
+- Walk/eco/drive limits, start mode and units are direct buttons again (labelled experimental/unverified), with the swap switches.
+- Top speed per mode with "fastest seen now", park toggle with the password reply, auto-connect to the last scooter, cancel connecting, the Volpam F1F1 heartbeat toggle, mode buttons on the dashboard, gauge max (auto or fixed).
+- Developer terminal can send any frame again (after the developer-mode warning + per-send confirmation). Firmware/DFU/identity characteristics stay blocked.
+
+### New UI
+Black background, one accent color, SF Pro, a huge readable speed, fewer cards. Tabs: Dashboard, Controls, Trips, More. Connect is a sheet from the dashboard (and in More). Mode colors are off by default (Theme can turn them back on) and the full-screen mode color sweep is gone. Every v4 feature is still there: themes, 3 gauges, designer, trips + replay, simulator, diagnostics, Developer Lab, Startup Studio, Volpam.
+
+
 ## v4.0.0-beta (v4-dev, Nov 9 2026)
 
 ### Fixed

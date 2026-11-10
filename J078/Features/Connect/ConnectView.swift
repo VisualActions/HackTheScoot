@@ -5,7 +5,6 @@ struct ConnectView: View {
     @EnvironmentObject var themes: ThemeStore
 
     var body: some View {
-        NavigationView {
             List {
                 Section {
                     HStack {
@@ -20,8 +19,16 @@ struct ConnectView: View {
                             Text(ble.adapter.level.blurb).font(.caption).foregroundColor(.secondary)
                         }
                         Button(ble.isSimulating ? "Stop simulator" : "Disconnect", role: .destructive) { ble.disconnect() }
+                    } else if ble.connected != nil {
+                        Button("Cancel connecting", role: .destructive) { ble.disconnect() }
                     }
-                    Toggle("Auto-reconnect", isOn: $ble.autoReconnect)
+                    Toggle("Auto-connect to my last scooter", isOn: $ble.autoReconnect)
+                }
+
+                if ble.hasF1F1 && ble.kind != .j078 {
+                    Section(header: Text("Volpam / F1F1"), footer: Text("v3 heartbeat (A5 02 FD 5A on F1F1), from reading the vendor app. Heartbeats sent: \(ble.volpamHeartbeatsSent)")) {
+                        Toggle("Heartbeat", isOn: Binding(get: { ble.volpamHeartbeatOn }, set: { ble.setVolpamHeartbeat($0) }))
+                    }
                 }
 
                 if !ble.savedScooters.isEmpty {
@@ -80,9 +87,8 @@ struct ConnectView: View {
                     }
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Connect")
-        }
-        .navigationViewStyle(.stack)
     }
 
     private func confidenceText(_ c: MatchConfidence) -> String {

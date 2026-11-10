@@ -40,7 +40,7 @@ struct SpeedReadout: View {
     var size: CGFloat
     var body: some View {
         VStack(spacing: 0) {
-            Text(m.stale ? "--" : String(format: "%.0f", m.speed))
+            Text(m.stale ? "--" : "\(safeInt(m.speed))")
                 .font(.system(size: size, weight: .bold, design: m.font))
                 .monospacedDigit()
                 .foregroundColor(m.night ? m.color.opacity(0.85) : .primary)
@@ -59,7 +59,7 @@ struct SpeedReadout: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(m.stale ? "Speed unavailable" : "\(Int(m.speed.rounded())) \(m.unit)\(m.simulated ? ", simulated" : "")")
+        .accessibilityLabel(m.stale ? "Speed unavailable" : "\(safeInt(m.speed)) \(m.unit)\(m.simulated ? ", simulated" : "")")
     }
 }
 
@@ -81,7 +81,7 @@ struct ClassicGauge: View {
                         .rotationEffect(.degrees(-135 + Double(i) * 13.5))
                 }
                 ForEach(0...4, id: \.self) { i in
-                    Text("\(Int(m.maxSpeed * Double(i) / 4))")
+                    Text("\(safeInt(m.maxSpeed * Double(i) / 4))")
                         .font(.system(size: s * 0.055, weight: .medium, design: m.font))
                         .foregroundColor(.secondary)
                         .offset(y: -s * 0.31)

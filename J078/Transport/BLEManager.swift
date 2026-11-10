@@ -164,6 +164,10 @@ final class BLEManager: NSObject, ObservableObject {
     private var pendingPark: Bool?
     private var playedSoundThisConnection = false
     private var pendingNotify: Set<String> = []
+    private var pendingServices = -1
+    /// A Nordic-UART-style device with 6E400002/6E400003 that is not named like a J078:
+    /// listened to, and promoted to the J078 path the moment a real J078 status frame arrives.
+    private var j078Candidate = false
     private var simulator: ScooterSimulator?
     private var reconnectWork: DispatchWorkItem?
 
@@ -176,8 +180,9 @@ final class BLEManager: NSObject, ObservableObject {
         for g in Gear.allCases { limitsKmh[g] = g.capturedLimitKmh }
         reconnect.enabled = autoReconnect
         loadSaved()
-        central = CBCentralManager(delegate: self, queue: nil,
-                                   options: [CBCentralManagerOptionRestoreIdentifierKey: BLEManager.restoreID])
+        // v4.0.1: no CoreBluetooth state restoration (v3 had none). A restored peripheral
+        // came back "connected" with no session started, so nothing worked.
+        central = CBCentralManager(delegate: self, queue: nil)
     }
 
     // MARK: Log
@@ -369,6 +374,7 @@ final class BLEManager: NSObject, ObservableObject {
         volpamHeartbeatOn = false
         volpamHeartbeatsSent = 0
         pendingNotify = []
+        j078Candidate = false
         rssi = nil
         rxMeter = RateMeter()
         rxPerSecond = 0
@@ -412,6 +418,15 @@ final class BLEManager: NSObject, ObservableObject {
             kind = AdapterRegistry.kind(for: a)
             adapterID = a.id
             matchConfidence = conf
+            // v3 fallback: the name the phone reports for the scooter can differ from the
+            // advertised "365_scooter" (iOS caches GAP names). v3 also matched the name
+            // the scooter was connected under and the 16-bit-base 6E400001 service.
+            if kind != .j078, Proto.kind(fromServices: (p.services ?? []).map { $0.uuid }) == .j078
+                || p.name?.lowercased().hasPrefix(Proto.advertisedName) == true {
+                kind = .j078
+                adapterID = Joyhis365Adapter.adapterID
+                matchConfidence = .services
+            }
         }
         info("Identified: \(adapter.displayName) (\(adapter.level.rawValue)), match: \(matchConfidence)")
         rememberConnected()
@@ -424,7 +439,12 @@ final class BLEManager: NSObject, ObservableObject {
                 setPhase(.ready)
                 return
             }
-            subscribe([n])
+            // v4.0.1 = v3 timing: notifications are already being turned on (discovery),
+            // so the session starts right away: hello + AC CC CC, then the 500 ms keep-alive.
+            // v4.0.0 waited for iOS to confirm the subscription first and dropped to
+            // "disconnected" after 5 s, so on real hardware nothing was ever sent.
+            if !n.isNotifying { p.setNotifyValue(true, for: n) }
+            startJ078Session()
         case .volpam:
             guard f1f1Char != nil, let d = f2f1Char else {
                 info("Volpam channels not found (need F1F1 write + F2F1 notify). Read-only.")
@@ -437,7 +457,12 @@ final class BLEManager: NSObject, ObservableObject {
             // Read-only: listen to everything that can notify, write nothing.
             let notif = allCharacteristics().filter { $0.properties.contains(.notify) || $0.properties.contains(.indicate) }
             for c in notif where !c.isNotifying { p.setNotifyValue(true, for: c) }
-            info("Unknown device: listening only. Every notification is shown in the Developer Lab.")
+            j078Candidate = writeChar != nil && notifyChar != nil
+            if j078Candidate {
+                info("Has 6E400002/6E400003 but isn't identified as a J078. Listening; it switches to the J078 controls if a J078 status frame arrives.")
+            } else {
+                info("Unknown device: listening only. Every notification is shown in the Developer Lab.")
+            }
             setPhase(.ready)
             playStartupOnce()
         }
@@ -454,8 +479,11 @@ final class BLEManager: NSObject, ObservableObject {
         let sid = timers.sessionID
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             guard let self = self, self.timers.sessionID == sid, self.phase == .subscribing else { return }
-            self.info("Notifications were not confirmed in 5 s. Nothing will be sent. Try reconnecting.")
-            self.setPhase(.disconnected(reason: "notifications not confirmed"))
+            // v4.0.0 gave up here and showed "disconnected" while the link was still up.
+            // v3 never waited at all, so carry on: replies are read whenever they arrive.
+            self.info("Notifications not confirmed by iOS within 5 s; starting anyway (v3 behaviour).")
+            self.pendingNotify = []
+            self.subscriptionsConfirmed()
         }
     }
 
@@ -576,9 +604,16 @@ final class BLEManager: NSObject, ObservableObject {
 
     /// Speed limit, factory range only. Sport is verified; other gears need the
     /// experimental confirmation. The readout shows what the SCOOTER acked.
-    func setSpeedLimit(_ g: Gear, kmh: Int, experimentalConfirmed: Bool = false) {
+    /// v3 behaviour: one write per tap of Set, 6...45 km/h. Above the stock limit only
+    /// after the one-time warning was accepted (aboveStockAccepted). The scooter's reply
+    /// (DB EB BA) is what the readout shows; it clamps what it won't take.
+    func setSpeedLimit(_ g: Gear, kmh: Int, experimentalConfirmed: Bool = true) {
         guard let frame = Proto.setLimit(g, kmh: kmh) else {
-            info("Not sent: \(kmh) km/h is outside the factory range for \(g.name) (\(g.limitRange.lowerBound)-\(g.limitRange.upperBound)).")
+            info("Not sent: \(kmh) km/h is outside \(Gear.absoluteMinKmh)-\(Gear.absoluteMaxKmh) km/h.")
+            return
+        }
+        if kmh > g.factoryMaxKmh && !UserDefaults.standard.bool(forKey: Keys.aboveStockAccepted) {
+            info("Not sent: \(kmh) km/h is above stock for \(g.name). Accept the above-stock warning first.")
             return
         }
         if isSimulating {
@@ -588,14 +623,15 @@ final class BLEManager: NSObject, ObservableObject {
             return
         }
         guard canControl else { info("Not sent, no J078 ready: speed limit"); return }
-        if !g.limitWriteVerified && !experimentalConfirmed { info("Not sent: \(g.name) limit is experimental and needs confirmation."); return }
+        let safety = J078Safety.classify(decoded: frame, scrambled: true)
+        if safety != .verified && !experimentalConfirmed { info("Not sent: \(g.name) \(kmh) km/h needs confirmation."); return }
         limitRequested[g] = kmh
         limitAccepted[g] = nil
         limitAckAt[g] = nil
         limitSentAt[g] = Date()
-        let tag = g.limitWriteVerified ? "" : " (experimental)"
+        let tag = kmh > g.factoryMaxKmh ? " (above stock)" : (g.limitWriteVerified ? "" : " (experimental)")
         writeJ078(frame, note: "set speed limit \(g.name) = \(kmh) km/h\(tag)",
-                  origin: g.limitWriteVerified ? .control : .experimental, confirmed: experimentalConfirmed)
+                  origin: safety == .verified ? .control : .experimental, confirmed: experimentalConfirmed)
     }
 
     func setLight(_ on: Bool) { sendCommand(Proto.Cmd.light, on ? 0x01 : 0x00, note: on ? "light on" : "light off") }
@@ -668,7 +704,12 @@ final class BLEManager: NSObject, ObservableObject {
         } else {
             safety = .blocked
         }
-        return guarded(air, decoded: scramble ? bytes : nil, to: c, channel: charName, safety: safety,
+        // v3's terminal could send any bytes to any writable characteristic once developer
+        // mode was on. v4.0.1 restores that: a frame the classifier doesn't know goes out
+        // as EXPERIMENTAL (advanced warning accepted + this send confirmed). DFU / identity
+        // characteristics stay blocked by the WriteGuard whatever is typed.
+        let manualSafety: CommandSafety = safety == .blocked ? .experimental : safety
+        return guarded(air, decoded: scramble ? bytes : nil, to: c, channel: charName, safety: manualSafety,
                        origin: .manual, confirmed: true, note: "manual (\(label))")
     }
 
@@ -938,6 +979,10 @@ extension BLEManager: CBCentralManagerDelegate {
             if let p = connected, !userWantsDisconnect, p.state != .connected {
                 info("Bluetooth back on: reconnecting to \(connectedName)")
                 central.connect(p, options: nil)
+            } else if autoReconnect, connected == nil, !isSimulating, let last = savedScooters.first {
+                // v3 behaviour: wait for the last scooter and connect as soon as it is in range.
+                info("Auto-connect: waiting for \(last.name)")
+                connectSaved(last)
             }
         case .poweredOff:
             isPoweredOn = false
@@ -953,18 +998,6 @@ extension BLEManager: CBCentralManagerDelegate {
         default:
             isPoweredOn = false
             bluetoothState = "Bluetooth: \(central.state.rawValue)"
-        }
-    }
-
-    /// iOS relaunched us in the background with a scooter we were connected to.
-    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
-        if let ps = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral], let p = ps.first {
-            connected = p
-            connectedName = p.name ?? "scooter"
-            source = .bluetooth
-            writeGuard.source = .bluetooth
-            p.delegate = self
-            info("Restored by iOS in the background: \(connectedName)")
         }
     }
 
@@ -1044,8 +1077,13 @@ extension BLEManager: CBCentralManagerDelegate {
 extension BLEManager: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        if let e = error { info("Service discovery error: \(e.localizedDescription)") }
         let services = peripheral.services ?? []
         info("Services: " + services.map { Proto.name(for: $0.uuid) }.joined(separator: ", "))
+        // v3 flow: count the services and set up once EVERY one has answered, even with an
+        // error (v4.0.0 waited for all of them to have characteristics, and one failed
+        // service left the app stuck at "connected" with nothing working).
+        pendingServices = services.count
         if services.isEmpty { setupChannels(); return }
         for s in services { peripheral.discoverCharacteristics(nil, for: s) }
     }
@@ -1060,9 +1098,17 @@ extension BLEManager: CBPeripheralDelegate {
             if c.properties.contains(.indicate) { props.append("indicate") }
             let line = "\(Proto.name(for: service.uuid)) / \(Proto.name(for: c.uuid)) [\(props.joined(separator: ","))]  \(c.uuid.uuidString)"
             if !characteristicsInfo.contains(line) { characteristicsInfo.append(line) }
+            // v3: turn notifications on as soon as a characteristic is found, exactly like
+            // v3 (and the 365 app) did. Never on DFU / identity characteristics.
+            let name = Proto.name(for: c.uuid).uppercased()
+            if (c.properties.contains(.notify) || c.properties.contains(.indicate)), !c.isNotifying,
+               !J078Safety.neverWriteCharacteristics.contains(name) {
+                peripheral.setNotifyValue(true, for: c)
+            }
         }
-        let all = peripheral.services ?? []
-        if all.allSatisfy({ $0.characteristics != nil }) { setupChannels() }
+        if let e = error { info("Characteristic error on \(Proto.name(for: service.uuid)): \(e.localizedDescription)") }
+        pendingServices -= 1
+        if pendingServices == 0 { setupChannels() }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
@@ -1080,6 +1126,15 @@ extension BLEManager: CBPeripheralDelegate {
         guard let data = characteristic.value else { return }
         let bytes = [UInt8](data)
         let n = Proto.name(for: characteristic.uuid)
+        if n == Proto.notifyPrefix && j078Candidate && kind != .j078, case .status = J078Incoming.parse(raw: bytes) {
+            // The frame shape proves it: a scrambled DB EB FA DB status on 6E400003.
+            j078Candidate = false
+            kind = .j078
+            adapterID = Joyhis365Adapter.adapterID
+            matchConfidence = .services
+            info("J078 status frame seen: switching to the J078 controls.")
+            startJ078Session()
+        }
         if n == Proto.notifyPrefix && kind == .j078 {
             handleJ078(bytes)
         } else if kind == .volpam && (n == VolpamProto.dataNotifyChar || n == VolpamProto.authNotifyChar) {

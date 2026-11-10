@@ -103,12 +103,26 @@ final class SpeedLimitTests: XCTestCase {
     func testCapturedWritesAndFactoryCap() {
         XCTAssertEqual(Proto.setLimit(.sport, kmh: 29), [0xBD, 0xBE, 0xAB, 0xA2, 0x1D])
         XCTAssertEqual(Proto.setLimit(.sport, kmh: 31), [0xBD, 0xBE, 0xAB, 0xA2, 0x1F])
-        XCTAssertNil(Proto.setLimit(.sport, kmh: 32), "no above-stock writes in v4")
-        XCTAssertNil(Proto.setLimit(.sport, kmh: 45))
-        XCTAssertNil(Proto.setLimit(.eco, kmh: 13))
-        XCTAssertNil(Proto.setLimit(.sport, kmh: 5))
+        // v4.0.1: v3's above-stock range (6...45 km/h) is back, behind the UI warning.
+        XCTAssertEqual(Proto.setLimit(.sport, kmh: 32), [0xBD, 0xBE, 0xAB, 0xA2, 0x20])
+        XCTAssertEqual(Proto.setLimit(.sport, kmh: 45), [0xBD, 0xBE, 0xAB, 0xA2, 0x2D])
+        XCTAssertEqual(Proto.setLimit(.eco, kmh: 13), [0xBD, 0xBE, 0xAB, 0xA0, 0x0D])
+        XCTAssertNil(Proto.setLimit(.sport, kmh: 46), "never above 45 km/h")
+        XCTAssertNil(Proto.setLimit(.sport, kmh: 5), "never below 6 km/h")
         XCTAssertEqual(Gear.sport.factoryMaxKmh, 31)
         XCTAssertFalse(Gear.walk.limitAdjustable)
+    }
+
+    /// The v4.0.0 Controls crash: walk's stock range is 6...6, and a SwiftUI Slider with
+    /// equal bounds crashes. Every slider range the app builds must be at least 1 wide.
+    func testSliderRangesAreNeverZeroWidth() {
+        for g in Gear.allCases {
+            for above in [false, true] {
+                let r = g.sliderRange(aboveStock: above)
+                XCTAssertLessThan(r.lowerBound, r.upperBound, "\(g.name) aboveStock=\(above)")
+            }
+            XCTAssertEqual(g.sliderRange(aboveStock: true), 6...45)
+        }
     }
 
     func testAckParsing() {
@@ -132,7 +146,8 @@ final class SpeedLimitTests: XCTestCase {
     func testSafetyClassification() {
         XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0xA2, 0x1F], scrambled: true), .verified)
         XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0xA0, 0x0A], scrambled: true), .experimental)
-        XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0xA2, 0x20], scrambled: true), .blocked)
+        XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0xA2, 0x20], scrambled: true), .experimental, "above stock needs the confirmation")
+        XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0xA2, 0x2E], scrambled: true), .blocked, "46 km/h is never sent")
         XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0xA2, 0xFF], scrambled: true), .verified)
         XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0x00, 0x01], scrambled: true), .verified)
         XCTAssertEqual(J078Safety.classify(decoded: [0xBD, 0xBE, 0xAB, 0x05, 0x09], scrambled: true), .experimental)
