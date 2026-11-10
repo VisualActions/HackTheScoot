@@ -1,6 +1,7 @@
 name: J078
 options:
   bundleIdPrefix: com.example
+  developmentLanguage: en
   deploymentTarget:
     iOS: "16.0"
 targets:
@@ -12,14 +13,17 @@ targets:
       - path: J078
     settings:
       base:
+        # PRODUCT_NAME / bundle id kept on purpose: changing them makes iOS treat 5.0 as a
+        # different app (no in-place update, settings and trips not carried over).
+        # See RELEASE-CHECKLIST.md "Bundle id" for how to change it at App Store time.
         PRODUCT_NAME: J078
         PRODUCT_BUNDLE_IDENTIFIER: com.example.j078app
         INFOPLIST_FILE: Support/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
-        MARKETING_VERSION: "4.2.0"
-        CURRENT_PROJECT_VERSION: "7"
+        MARKETING_VERSION: "5.0.0"
+        CURRENT_PROJECT_VERSION: "8"
         ENABLE_BITCODE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

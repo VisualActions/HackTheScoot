@@ -455,11 +455,12 @@ struct MaintenanceView: View {
 // MARK: - Help / FAQ (free)
 
 struct HelpView: View {
+    var ble: BLEManager? = nil
     private struct QA: Identifiable { let id: Int; let q: String; let a: String }
     private let faq: [QA] = [
         QA(id: 0, q: "It says connected but nothing changes", a: "Wait for \"Ready\" on the Dashboard. On the J078 the app sends the same hello, password and keep-alive as v3. If it stays stuck, open More > Packet logger, record 20 seconds, and share the file."),
         QA(id: 1, q: "Why can't I control my e-bike or Ninebot?", a: "Fardriver and Ninebot support is new and read-only: live data only. Controls unlock only after a Bluetooth capture from that exact vehicle proves what each command does. Motor-controller settings can damage hardware, so the app never guesses."),
-        QA(id: 2, q: "How do I send a capture?", a: "Controls (or More) > Packet logger > Start. Use the vehicle's official app at the same time if you can, press the buttons you want supported one at a time, then Stop and Share."),
+        QA(id: 2, q: "How do I send a capture?", a: "Open \"Help unlock your scooter or e-bike\" below. Quick route: start the packet logger, connect, press one thing at a time in the official app (tap \"I pressed...\" after each), stop, and share. Advanced route: Apple's Bluetooth logging profile plus a sysdiagnose. Never post a password publicly."),
         QA(id: 3, q: "Is the distance real?", a: "It's estimated from speed × time between samples. It isn't the scooter's odometer."),
         QA(id: 4, q: "How do I go past the stock speed?", a: "Controls > Set speed limits. Above-stock values sit behind a one-time warning, and the scooter can still clamp what it accepts: the app shows what you asked for and what it accepted."),
         QA(id: 5, q: "Speed alert", a: "More > Speed alert. Pick a speed; the phone buzzes and beeps once when you pass it. It never changes the scooter."),
@@ -480,8 +481,19 @@ struct HelpView: View {
                     }
                 }
             }
+            if let b = ble ?? BLEManager.current {
+                Section(header: Text("New vehicle?"), footer: Text("Fardriver, Ninebot and unknown vehicles stay read-only until someone sends a capture.")) {
+                    NavigationLink { CaptureGuideView(ble: b) } label: { Label("Help unlock your scooter or e-bike", systemImage: "lock.open") }
+                }
+            }
             Section(footer: Text("Ride safe: wear a helmet, and check the brakes before riding.")) {
                 NavigationLink("What works (evidence)") { EvidenceView() }
+                NavigationLink { CompatCheckerView() } label: { Label("Compatibility checker", systemImage: "checkmark.seal") }
+                NavigationLink { FaultListView() } label: { Label("Fault explanations", systemImage: "exclamationmark.triangle") }
+                NavigationLink { WhatsNewView() } label: { Label("What's new in \(WhatsNew.version)", systemImage: "sparkles") }
+                NavigationLink { LegalDocView(doc: .privacy) } label: { Label("Privacy policy (DRAFT)", systemImage: "hand.raised") }
+                NavigationLink { LegalDocView(doc: .terms) } label: { Label("Terms of use (DRAFT)", systemImage: "doc.text") }
+                NavigationLink { LegalDocView(doc: .licenses) } label: { Label("Open-source credits", systemImage: "books.vertical") }
             }
         }
         .listStyle(.insetGrouped)
@@ -512,6 +524,13 @@ struct AppSettingsView: View {
                 }
                 .pickerStyle(.segmented)
             }
+            Section(header: Text("Appearance"), footer: Text("System follows your iPhone's light / dark setting. The riding dashboard stays dark so it's easy to read.")) {
+                Picker("Appearance", selection: $themes.theme.appearance) {
+                    Text("Dark").tag("dark"); Text("Light").tag("light"); Text("System").tag("system")
+                }
+                .pickerStyle(.segmented)
+            }
+            RouteSettingsSection()
             Section("Accent color") {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 12) {
                     ForEach(AppSettingsView.accents, id: \.self) { hex in
@@ -548,6 +567,9 @@ struct AppSettingsView: View {
                     .disabled(!AppIcons.supported)
                 }
             }
+            Section(footer: Text("English, with a first Spanish translation of the main screens. iPhones let you pick per app: iOS Settings > HackTheScoot > Language.")) {
+                Label("Language", systemImage: "globe")
+            }
         }
         .navigationTitle("App settings")
     }
@@ -559,18 +581,53 @@ struct PacketLoggerView: View {
     @ObservedObject var ble: BLEManager
     @ObservedObject var rec = PacketRecorder.shared
     @State private var url: URL?
+    @State private var customMark = ""
+    @State private var recovered: URL?
+    @State private var unfinished = AppJournal.shared.unfinishedCapture != nil && !PacketRecorder.shared.isRecording
 
     var body: some View {
         List {
-            Section(footer: Text("Records every Bluetooth frame in and out (passwords masked) until you stop, then share the file. Use it to send a capture from a new scooter or e-bike so its controls can be unlocked. Recording never sends anything to the vehicle.")) {
+            if unfinished {
+                Section(header: Text("Unfinished capture found"), footer: Text("The app closed while it was recording. Everything up to that moment was saved.")) {
+                    Button { recovered = AppJournal.shared.recoverUnfinished(); unfinished = false } label: { Label("Keep it", systemImage: "tray.and.arrow.down") }
+                    Button(role: .destructive) { AppJournal.shared.discardUnfinished(); unfinished = false } label: { Label("Delete it", systemImage: "trash") }
+                }
+            }
+            if let r = recovered {
+                Section("Recovered capture") { ShareLink(item: r) { Label("Share \(r.lastPathComponent)", systemImage: "square.and.arrow.up") } }
+            }
+            Section(footer: Text("Records every Bluetooth frame in and out (passwords masked) until you stop, then share the file. It's saved as it records, so a crash doesn't lose it. Recording never sends anything to the vehicle.")) {
+                NavigationLink { CaptureGuideView(ble: ble) } label: { Label("How to do a capture (tutorial)", systemImage: "questionmark.circle") }
                 if rec.isRecording {
                     Button(role: .destructive) { rec.stop(); url = rec.exportURL() } label: { Label("Stop recording", systemImage: "stop.circle.fill") }
                 } else {
                     Button { url = nil; rec.start(ble: ble) } label: { Label(rec.frames.isEmpty ? "Start recording" : "Start a new recording", systemImage: "record.circle") }
                 }
                 HStack { Text("Frames"); Spacer(); Text("\(rec.frames.count) (in \(rec.rxCount), out \(rec.txCount))").foregroundColor(.secondary).monospacedDigit() }
+                    .accessibilityElement(children: .combine)
                 if let s = rec.startedAt { HStack { Text("Started"); Spacer(); Text(s.formatted(date: .omitted, time: .standard)).foregroundColor(.secondary) } }
                 HStack { Text("Device"); Spacer(); Text(ble.isActive ? (ble.isSimulating ? "Simulator" : ble.connectedName) : "Not connected").foregroundColor(.secondary).lineLimit(1) }
+            }
+            if rec.isRecording {
+                Section(header: Text("I pressed... (\(rec.marks) so far)"), footer: Text("Tap right after each press in the official app, then wait \(CaptureGuide.pauseSeconds) seconds before the next one.")) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(CaptureGuide.quickMarks, id: \.self) { m in
+                            Button { rec.mark(m); if HapticsPref.on { UIImpactFeedbackGenerator(style: .light).impactOccurred() } } label: {
+                                Text(m).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("I pressed \(m)")
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    HStack {
+                        TextField("Something else (e.g. horn)", text: $customMark)
+                        Button("Mark") {
+                            let t = customMark.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !t.isEmpty { rec.mark(String(t.prefix(60))); customMark = "" }
+                        }
+                    }
+                }
             }
             if !rec.isRecording && !rec.frames.isEmpty {
                 Section {
@@ -579,6 +636,7 @@ struct PacketLoggerView: View {
                     } else {
                         Button { url = rec.exportURL() } label: { Label("Prepare file", systemImage: "doc") }
                     }
+                    NavigationLink { CaptureSendView(ble: ble) } label: { Label("Send it (GitHub, email, mask a PIN)", systemImage: "paperplane") }
                 }
             }
             Section("Latest frames") {
@@ -608,6 +666,9 @@ struct ReadOnlyLiveView: View {
                     Label(PacketRecorder.shared.isRecording ? "Packet logger (recording)" : "Start the packet logger", systemImage: "record.circle")
                 }
                 .simultaneousGesture(TapGesture().onEnded { if !PacketRecorder.shared.isRecording { PacketRecorder.shared.start(ble: ble) } })
+                NavigationLink { CaptureGuideView(ble: ble) } label: {
+                    Label("Help unlock this vehicle (capture tutorial)", systemImage: "lock.open")
+                }
             }
             if let f = ble.fardriver {
                 FardriverLiveSection(t: f)
@@ -641,7 +702,10 @@ struct FardriverLiveSection: View {
                 footer: Text("Decoded from the public, MIT-licensed Fardriver notes. Values are unverified until a capture is checked against the official app. Power is volts × amps, worked out here.")) {
             if let f = t.faults, !f.active.isEmpty {
                 ForEach(f.active, id: \.self) { name in
-                    Label(name, systemImage: "exclamationmark.triangle.fill").foregroundColor(.red)
+                    NavigationLink { FaultDetailView(fault: FaultCatalog.explain(name)) } label: {
+                        Label(name, systemImage: "exclamationmark.triangle.fill").foregroundColor(.red)
+                    }
+                    .accessibilityHint("Shows what this warning usually means")
                 }
             }
             row("Battery", t.volts.map { String(format: "%.1f V", $0) } ?? "--")

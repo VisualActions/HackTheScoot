@@ -64,7 +64,10 @@ final class TripManager: ObservableObject {
 
     private func begin(simulated: Bool, at t: Date, first: TripSample) {
         current = Trip(start: t, end: nil, scooterName: scooterName(), source: simulated ? "simulation" : "bluetooth", samples: [first])
-        if !simulated { current?.scooterID = scooterID() }
+        if !simulated {
+            current?.scooterID = scooterID()
+            RouteRecorder.shared.begin(at: t)        // v5.0 opt-in GPS route
+        }
         Feedback.shared.fire(.tripStart)
     }
 
@@ -73,6 +76,7 @@ final class TripManager: ObservableObject {
         guard var c = current else { return }
         current = nil
         c.end = Date()
+        if let r = RouteRecorder.shared.end() { c.route = r }
         if c.samples.count >= 5 {
             trips.insert(c, at: 0)
             store.save(trips)
@@ -88,6 +92,14 @@ final class TripManager: ObservableObject {
     func clear() {
         trips.removeAll()
         store.save(trips)
+    }
+
+    /// v5.0 restore: trips from a backup are added (never replace what's here).
+    func importTrips(_ incoming: [Trip]) -> Int {
+        let before = trips.count
+        trips = BackupBundle.merge(existing: trips, incoming: incoming)
+        store.save(trips)
+        return trips.count - before
     }
 
     func exportURL(_ t: Trip, mph: Bool) -> URL? {

@@ -6,9 +6,12 @@ struct J078App: App {
     @StateObject private var trips = TripManager()
     @StateObject private var themes = ThemeStore()
 
+    @Environment(\.scenePhase) private var scenePhase
+
     init() {
         Keychain.migrateParkPIN()
         AppAppearance.apply()
+        AppJournal.shared.launched(version: AppInfo.version)   // v5.0 crash-safe log
     }
 
     var body: some Scene {
@@ -22,6 +25,13 @@ struct J078App: App {
                     GarageStore.shared.attach(ble)
                     trips.scooterID = { GarageStore.shared.activeID }
                 }
+                .onChange(of: scenePhase) { p in
+                    switch p {
+                    case .active: AppJournal.shared.becameActive()
+                    case .background: AppJournal.shared.wentToBackground()
+                    default: break
+                    }
+                }
         }
     }
 }
@@ -31,7 +41,10 @@ enum AppAppearance {
     static func apply() {
         let tab = UITabBarAppearance()
         tab.configureWithDefaultBackground()
-        tab.backgroundColor = UIColor(white: 0.04, alpha: 0.94)
+        // v5.0: follows light / dark (it used to be black in light mode too)
+        tab.backgroundColor = UIColor { t in
+            t.userInterfaceStyle == .light ? UIColor(white: 0.97, alpha: 0.94) : UIColor(white: 0.04, alpha: 0.94)
+        }
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
     }
@@ -50,6 +63,8 @@ struct RootView: View {
     @State private var showOnboarding = !Onboarding.done
     @State private var wasLinked = false
     @State private var lastName = ""
+    @State private var showWhatsNew = Onboarding.done && WhatsNew.shouldShow(seen: UserDefaults.standard.string(forKey: WhatsNew.seenKey), current: WhatsNew.version)
+    @State private var proReturnMessage: String?
 
     var body: some View {
         ZStack {
@@ -87,7 +102,27 @@ struct RootView: View {
             })
             .environmentObject(themes)
         }
-        .onAppear { if Onboarding.done { ble.startBluetooth() } }
+        .onAppear {
+            if Onboarding.done { ble.startBluetooth() } else { UserDefaults.standard.set(WhatsNew.version, forKey: WhatsNew.seenKey) }
+        }
+        .sheet(isPresented: Binding(get: { showWhatsNew && !showStartup && !showOnboarding && !choosing }, set: { showWhatsNew = $0 })) {
+            NavigationView { WhatsNewView(onDone: { showWhatsNew = false }) }
+                .environmentObject(themes)
+                .preferredColorScheme(themes.colorScheme)
+        }
+        // v5.0: the Stripe TEST checkout's thank-you page opens hackthescoot://pro-test
+        .onOpenURL { url in
+            guard let plan = ProReturnLink.plan(from: url), Billing.testMode else { return }
+            StoreManager.shared.testUnlock = max(StoreManager.shared.testUnlock, .pro)
+            UserDefaults.standard.set("stripe-test-\(plan)", forKey: "premium.unlockedBy")
+            AppJournal.shared.note("pro test unlock from the Stripe test return link (\(plan))")
+            proReturnMessage = ProReturnLink.note
+        }
+        .alert("Pro (test) is on", isPresented: Binding(get: { proReturnMessage != nil }, set: { if !$0 { proReturnMessage = nil } })) {
+            Button("OK", role: .cancel) { proReturnMessage = nil }
+        } message: {
+            Text(proReturnMessage ?? "")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .hackTheScootShowOnboarding)) { _ in showOnboarding = true }
         .fullScreenCover(isPresented: Binding(get: { choosing && !showStartup && !showOnboarding }, set: { choosing = $0 })) {
             ChooseScooterView(onDone: {

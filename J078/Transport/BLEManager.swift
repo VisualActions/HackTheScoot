@@ -149,6 +149,8 @@ final class BLEManager: NSObject, ObservableObject {
     /// v4.2 read-only adapters: live values decoded from what the vehicle sends on its own.
     @Published var fardriver: FardriverTelemetry?
     @Published var ninebot: NinebotTelemetry?
+    /// v5.0: Device Information (180A) values, read only when the rider taps "Read device info".
+    @Published var deviceInfo: [String: String] = [:]
     private var fardriverStream = FardriverStream()
     /// v4.2: the controller type the Garage has for a Bluetooth id (Fardriver / Ninebot),
     /// used only when detection found nothing. Read-only adapters, so a wrong hint can't write.
@@ -192,8 +194,12 @@ final class BLEManager: NSObject, ObservableObject {
     private let lastGearKey = "lastGear"
     static let restoreID = "com.hackthescoot.central"
 
+    /// v5.0: the app's Bluetooth manager, for screens opened without one (Help). Weak.
+    static weak var current: BLEManager?
+
     override init() {
         super.init()
+        BLEManager.current = self
         for g in Gear.allCases { limitsKmh[g] = g.capturedLimitKmh }
         reconnect.enabled = autoReconnect
         loadSaved()
@@ -247,6 +253,7 @@ final class BLEManager: NSObject, ObservableObject {
     // MARK: Phase
 
     private func setPhase(_ p: ConnectionPhase) {
+        if p != phase { AppJournal.shared.note("phase \(p.label)" + (connectedName.isEmpty ? "" : " (\(connectedName))")) }
         phase = p
         switch p {
         case .ready, .synchronizing:
@@ -319,6 +326,45 @@ final class BLEManager: NSObject, ObservableObject {
         forcedKind = nil
         startConnecting(p, name: s.name)
         kind = s.kind
+    }
+
+    // MARK: v5.0 read-only helpers (never write)
+
+    /// Finds vehicles another app on this phone (the official app) is already connected to.
+    /// They don't advertise while connected, so a normal scan can't see them.
+    @discardableResult
+    func findConnectedToThisPhone() -> Int {
+        if central == nil { startBluetooth() }
+        guard isPoweredOn else { info("Can't look: \(bluetoothState)"); return 0 }
+        let ids = CaptureGuide.knownServiceUUIDs.map { CBUUID(string: $0) }
+        let list = central.retrieveConnectedPeripherals(withServices: ids)
+        for p in list {
+            let name = (p.name ?? "(no name)")
+            let (a, conf) = AdapterRegistry.best(name: name, serviceIDs: [])
+            let k = conf == .none ? Proto.guessKind(name: name, services: []) : AdapterRegistry.kind(for: a)
+            let entry = FoundDevice(id: p.identifier, peripheral: p, name: name, rssi: -40,
+                                    advertisedServices: [], kind: k, adapterName: (conf == .none ? "Unknown" : a.displayName) + " · already connected to this phone",
+                                    confidence: conf, lastSeen: Date())
+            if let i = devices.firstIndex(where: { $0.id == p.identifier }) { devices[i] = entry } else { devices.append(entry) }
+        }
+        info("Already connected to this phone: \(list.count) device(s)")
+        return list.count
+    }
+
+    static let deviceInfoService = CBUUID(string: "180A")
+    static let deviceInfoNames: [String: String] = [
+        "2A29": "Manufacturer", "2A24": "Model number", "2A25": "Serial number", "2A27": "Hardware revision",
+        "2A26": "Firmware revision", "2A28": "Software revision", "2A23": "System ID",
+    ]
+
+    /// Reads the standard Device Information service, if the vehicle has one. A read, not a write.
+    func readDeviceInfo() {
+        guard let p = connected, !isSimulating, let svc = p.services?.first(where: { $0.uuid == BLEManager.deviceInfoService }) else {
+            info("No Device Information service on this vehicle")
+            return
+        }
+        for c in svc.characteristics ?? [] where c.properties.contains(.read) { p.readValue(for: c) }
+        info("Reading device info (read-only)")
     }
 
     // MARK: Scan
@@ -441,6 +487,7 @@ final class BLEManager: NSObject, ObservableObject {
         fardriver = nil
         ninebot = nil
         fardriverStream = FardriverStream()
+        deviceInfo = [:]
     }
 
     // MARK: Channels
@@ -1196,6 +1243,14 @@ extension BLEManager: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard let data = characteristic.value else { return }
+        // v5.0: Device Information reads (only after "Read device info"). No protocol uses 180A.
+        if characteristic.service?.uuid == BLEManager.deviceInfoService {
+            let key = BLEManager.deviceInfoNames[characteristic.uuid.uuidString.uppercased()] ?? characteristic.uuid.uuidString
+            let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .controlCharacters.union(.whitespaces)) ?? ""
+            let printable = !text.isEmpty && text.unicodeScalars.allSatisfy { $0.value >= 0x20 && $0.value < 0x7F }
+            deviceInfo[key] = key == "Serial number" ? "(hidden: \(text.count) characters)" : (printable ? text : Proto.hex([UInt8](data)))
+            return
+        }
         let bytes = [UInt8](data)
         let n = Proto.name(for: characteristic.uuid)
         if n == Proto.notifyPrefix && j078Candidate && kind != .j078, case .status = J078Incoming.parse(raw: bytes) {

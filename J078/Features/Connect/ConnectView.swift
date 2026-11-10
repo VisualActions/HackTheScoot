@@ -54,6 +54,10 @@ struct ConnectView: View {
                         Toggle("Likely scooters only", isOn: $ble.showOnlyScooters).labelsHidden()
                         Text("Scooters only").font(.caption)
                     }
+                    Button { ble.findConnectedToThisPhone() } label: {
+                        Label("Find vehicles already connected to this phone", systemImage: "link")
+                    }
+                    .accessibilityHint("Lists a vehicle the official app is connected to, so HackTheScoot can listen too")
                     if ble.isScanning && ble.visibleDevices.isEmpty {
                         HStack { ProgressView(); Text("Looking...").foregroundColor(.secondary) }
                     }

@@ -53,6 +53,13 @@ struct MoreView: View {
                     NavigationLink { RideTimerView() } label: { Label("Ride timer and laps", systemImage: "stopwatch") }
                     NavigationLink { RideStatsView(trips: TripManager.sharedForMore) } label: { Label("Ride stats", systemImage: "chart.line.uptrend.xyaxis") }
                     NavigationLink { ParkedSpotView(ble: ble) } label: { Label("Last parked here", systemImage: "mappin.and.ellipse") }
+                    NavigationLink { BatteryRangeView(ble: ble) } label: { Label("Battery and range (estimated)", systemImage: "battery.75") }
+                }
+                Section(header: Text("Vehicle"), footer: Text("New brand? Fardriver, Ninebot and unknown vehicles stay read-only until someone sends a capture.")) {
+                    NavigationLink { CaptureGuideView(ble: ble) } label: { Label("Help unlock your scooter or e-bike", systemImage: "lock.open") }
+                    NavigationLink { VehicleInfoView(ble: ble) } label: { Label("Vehicle info and firmware", systemImage: "info.circle") }
+                    NavigationLink { CompatCheckerView() } label: { Label("Compatibility checker", systemImage: "checkmark.seal") }
+                    NavigationLink { FaultListView() } label: { Label("Fault explanations", systemImage: "exclamationmark.triangle") }
                 }
                 Section("Dashboard") {
                     NavigationLink { ThemeEditorView() } label: { Label("Theme and colors", systemImage: "paintpalette") }
@@ -78,7 +85,9 @@ struct MoreView: View {
                 }
                 Section("App") {
                     NavigationLink { AppSettingsView() } label: { Label("App settings (units, accent, haptics, icon)", systemImage: "gearshape") }
-                    NavigationLink { HelpView() } label: { Label("Help and FAQ", systemImage: "questionmark.circle") }
+                    NavigationLink { HelpView(ble: ble) } label: { Label("Help and FAQ", systemImage: "questionmark.circle") }
+                    NavigationLink { BackupView() } label: { Label("Backup and restore", systemImage: "externaldrive") }
+                    NavigationLink { WhatsNewView() } label: { Label("What's new in \(WhatsNew.version)", systemImage: "sparkles") }
                     Button { NotificationCenter.default.post(name: .hackTheScootShowOnboarding, object: nil) } label: { Label("Show the intro again", systemImage: "hand.wave") }
                     NavigationLink { StartupStudioView() } label: { Label("Startup Studio", systemImage: "sparkles") }
                     NavigationLink { FeedbackSettingsView() } label: { Label("Haptics and sounds", systemImage: "waveform") }
@@ -94,6 +103,7 @@ struct MoreView: View {
                     NavigationLink { LogPage(ble: ble) } label: { Label("Packet log", systemImage: "list.bullet.rectangle") }
                     NavigationLink { PacketLoggerView(ble: ble) } label: { Label("Packet logger (record a capture)", systemImage: "record.circle") }
                     NavigationLink { DeveloperSettingsView() } label: { Label("Developer settings (test unlock)", systemImage: "hammer") }
+                    NavigationLink { AppLogView() } label: { Label("App log (crash-safe)", systemImage: "doc.plaintext") }
                 }
                 Section(header: Text("About"), footer: Text("Trips, logs and settings stay on this phone unless you export them. Nothing is uploaded.")) {
                     HStack(spacing: 12) {
@@ -104,6 +114,9 @@ struct MoreView: View {
                         }
                     }
                     NavigationLink("What works (evidence)") { EvidenceView() }
+                    NavigationLink("Privacy policy (DRAFT)") { LegalDocView(doc: .privacy) }
+                    NavigationLink("Terms of use (DRAFT)") { LegalDocView(doc: .terms) }
+                    NavigationLink("Open-source credits") { LegalDocView(doc: .licenses) }
                 }
             }
             .listStyle(.insetGrouped)

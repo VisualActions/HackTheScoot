@@ -27,6 +27,13 @@ final class ThemeStore: ObservableObject {
         }
     }
 
+    /// v5.0 restore: re-read the theme and layouts after a backup was imported.
+    func reload() {
+        let ud = UserDefaults.standard
+        if let d = ud.data(forKey: key), case .success(let t) = DashTheme.importJSON(d) { theme = t }
+        if let d = ud.data(forKey: layoutsKey), let l = try? JSONDecoder().decode(SavedLayouts.self, from: d) { layouts = l }
+    }
+
     private func save() {
         if let d = theme.exportJSON() { UserDefaults.standard.set(d, forKey: key) }
     }

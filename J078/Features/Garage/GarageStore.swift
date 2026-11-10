@@ -22,6 +22,14 @@ final class GarageStore: ObservableObject {
         save()
     }
 
+    /// v5.0 restore: re-read the Garage after a backup was imported.
+    func reload(defaults: UserDefaults = .standard) {
+        if let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(GarageState.self, from: d), !s.scooters.isEmpty {
+            state = s
+            save()
+        }
+    }
+
     var scooters: [GarageScooter] { return state.scooters }
     var active: GarageScooter? { return state.active }
     var activeID: UUID? { return state.active?.id }

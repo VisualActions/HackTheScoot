@@ -15,6 +15,22 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@v4
+      # v5.0: no secrets and no GPL/AGPL code can ship (prints only file names, never matches)
+      - name: Secret scan
+        run: |
+          PAT='(sk|rk)_(live|test)_[0-9A-Za-z]{10,}|whsec_[0-9A-Za-z]{10,}|ghp_[0-9A-Za-z]{30,}|github_pat_[0-9A-Za-z_]{30,}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----'
+          if grep -rIlE --exclude-dir=.git "$PAT" . ; then
+            echo "::error::Something that looks like a secret key is in the files above. Remove it (keys belong in GitHub Actions secrets)."
+            exit 1
+          fi
+          echo "No secret keys found."
+      - name: License scan (no GPL / AGPL code in the app)
+        run: |
+          if grep -rIlE "GNU (AFFERO |LESSER )?GENERAL PUBLIC LICENSE" J078 Tests ViewTests ; then
+            echo "::error::GPL/AGPL text found in the app sources (files above)."
+            exit 1
+          fi
+          echo "No GPL/AGPL code in the app."
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate the Xcode project
@@ -115,14 +131,14 @@ jobs:
           rm -rf Payload
           mkdir Payload
           cp -R "$APP" Payload/
-          zip -qry J078-unsigned.ipa Payload
+          zip -qry HackTheScoot-unsigned.ipa Payload
           ls -lh *.ipa
 
       - name: Upload the .ipa
         uses: actions/upload-artifact@v4
         with:
-          name: J078-unsigned-ipa
-          path: J078-unsigned.ipa
+          name: HackTheScoot-unsigned-ipa
+          path: HackTheScoot-unsigned.ipa
           if-no-files-found: error
 
   # Publishing waits for BOTH the tests and the build: a red test never ships.
@@ -136,33 +152,34 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: J078-unsigned-ipa
-      - run: cp J078-unsigned.ipa HackTheScoot-v4-beta-unsigned.ipa && ls -lh *.ipa
+          name: HackTheScoot-unsigned-ipa
+      - run: cp HackTheScoot-unsigned.ipa HackTheScoot-5.0.0-beta-unsigned.ipa && ls -lh *.ipa
 
-      # Stable: only main publishes "latest" (v3 stays the stable download until v4 is merged).
+      # Stable: only main publishes "latest" (v3 stays the stable download until the v5 PR is merged).
       - name: Publish the .ipa to the "latest" GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          gh release create latest J078-unsigned.ipa \
+          gh release create latest HackTheScoot-unsigned.ipa \
             --target "$GITHUB_SHA" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Latest build" \
-            --notes "Unsigned HackTheScoot IPA built from ${GITHUB_SHA::7}. Sideload it the same way as the README says." \
+            --title "HackTheScoot (latest)" \
+            --notes "Unsigned HackTheScoot IPA built from ${GITHUB_SHA::7}, after the tests passed. Sideload it the way the README says." \
             --latest
 
-      # Beta: v4-dev publishes a separate PRERELEASE, never touching "latest".
-      - name: Publish the v4 beta prerelease
+      # Beta: v4-dev publishes a separate PRERELEASE (v5-beta), never touching "latest".
+      # (The old v4-beta prerelease is left as it was: 4.2.0.)
+      - name: Publish the v5 beta prerelease
         if: github.ref == 'refs/heads/v4-dev'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete v4-beta --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          gh release create v4-beta HackTheScoot-v4-beta-unsigned.ipa \
+          gh release delete v5-beta --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create v5-beta HackTheScoot-5.0.0-beta-unsigned.ipa \
             --target "$GITHUB_SHA" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "HackTheScoot 4.2.0 beta" \
-            --notes "Unsigned 4.2.0 BETA (build 7) built from ${GITHUB_SHA::7} on v4-dev, after the unit tests and the screen tests (every screen, including all the new 4.2 ones) passed. New: speed alert, ride timer with laps, ride stats, share card image, maintenance reminders, last-parked spot (opt-in), long-press quick actions, units/accent/haptics/app icon settings, packet logger with export, help/FAQ, e-bikes in the Garage, and EXPERIMENTAL READ-ONLY Fardriver and Ninebot adapters (live data only until a capture, nothing is ever written to them). Nothing from 4.1 was removed or capped. Not yet tested on a real phone or vehicle. See CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
+            --title "HackTheScoot 5.0.0 beta (public release candidate)" \
+            --notes "Unsigned 5.0.0 BETA (build 8) built from ${GITHUB_SHA::7} on v4-dev, after the secret scan, the license scan, the unit tests and the screen tests (every screen, including all the new 5.0 ones) passed. New: a capture tutorial (Help unlock your scooter or e-bike) with I-pressed markers and a GitHub issue template, opt-in GPS route maps, ride search and filters, battery and range estimates, vehicle info / firmware (read-only), fault explanations, a compatibility checker, backup and restore, what's new, DRAFT privacy policy and terms, crash-safe logs, VoiceOver labels, Spanish started, and the Stripe TEST return link. Nothing from 4.2 was removed or capped. Fardriver, Ninebot and unknown vehicles stay read-only. Not yet tested on a real phone or vehicle. See CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
             --prerelease --latest=false

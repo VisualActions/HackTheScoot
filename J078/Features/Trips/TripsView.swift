@@ -6,6 +6,9 @@ struct TripsView: View {
     @EnvironmentObject var themes: ThemeStore
     @State private var confirmClear = false
     @State private var share: ShareItem?
+    @State private var filter = TripFilter()
+    @State private var showFilters = false
+    @ObservedObject private var garage = GarageStore.shared
 
     private var mph: Bool { themes.theme.units != "kmh" }
 
@@ -30,7 +33,33 @@ struct TripsView: View {
                     }
                     Toggle("Auto-record trips", isOn: $trips.autoRecord)
                 }
+                if !trips.trips.isEmpty {
+                    Section {
+                        DisclosureGroup(isExpanded: $showFilters) {
+                            Picker("Vehicle", selection: $filter.vehicleID) {
+                                Text("All vehicles").tag(UUID?.none)
+                                ForEach(garage.scooters) { v in Text(v.name).tag(UUID?.some(v.id)) }
+                            }
+                            Picker("When", selection: $filter.period) {
+                                ForEach(TripFilter.Period.allCases) { p in Text(p.label).tag(p) }
+                            }
+                            Picker("Rides", selection: $filter.source) {
+                                Text("All").tag(TripFilter.Source.all)
+                                Text("Real").tag(TripFilter.Source.real)
+                                Text("Simulated").tag(TripFilter.Source.simulated)
+                            }
+                            .pickerStyle(.segmented)
+                            Toggle("Only rides with a GPS route", isOn: $filter.withRouteOnly)
+                            if filter.isActive { Button("Clear filters") { filter = TripFilter() } }
+                        } label: {
+                            Label(filter.isActive ? "Filters on (\(filter.apply(trips.trips).count) of \(trips.trips.count))" : "Filter rides", systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                    }
+                }
                 Section("History") {
+                    if !trips.trips.isEmpty && filter.apply(trips.trips).isEmpty {
+                        Text("No rides match. Try clearing the search or filters.").foregroundColor(.secondary)
+                    }
                     if trips.trips.isEmpty {
                         VStack(spacing: 6) {
                             Image(systemName: "road.lanes").font(.largeTitle).foregroundColor(.secondary)
@@ -39,7 +68,7 @@ struct TripsView: View {
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 20)
                     }
-                    ForEach(trips.trips) { t in
+                    ForEach(filter.apply(trips.trips)) { t in
                         NavigationLink { TripDetailView(trip: t, mph: mph, trips: trips) } label: { TripCard(trip: t, mph: mph) }
                             .swipeActions { Button("Delete", role: .destructive) { trips.delete(t) } }
                     }
@@ -60,6 +89,7 @@ struct TripsView: View {
                 }
             }
             .navigationTitle("Trips")
+            .searchable(text: $filter.query, prompt: "Search rides (vehicle, date, mode)")
             .confirmationDialog("Delete every saved trip?", isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("Delete all", role: .destructive) { trips.clear() }
             }
@@ -107,7 +137,8 @@ struct TripDetailView: View {
     var body: some View {
         List {
             Section { TripCard(trip: trip, mph: mph) }
-            Section("Speed over time") { SpeedChart(samples: trip.samples, mph: mph).frame(height: 160) }
+            Section("Speed over time") { SpeedChart(samples: trip.samples, mph: mph).frame(height: 160).accessibilityLabel("Speed over time chart") }
+            TripRouteSection(trip: trip, mph: mph)
             Section("Summary") { Text(TripMath.summary(trip, mph: mph)).font(.footnote.monospaced()).textSelection(.enabled) }
             Section {
                 NavigationLink("Replay this trip") { TripReplayView(trip: trip, mph: mph) }

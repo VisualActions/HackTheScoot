@@ -203,6 +203,9 @@ final class MaintenanceStore: ObservableObject {
         return l
     }
 
+    /// v5.0 restore: forget the cache so lists are re-read.
+    func reload() { cache = [:]; revision += 1 }
+
     func set(_ l: [MaintenanceItem], for id: UUID) {
         cache[id] = l
         if let d = try? JSONEncoder().encode(l) { UserDefaults.standard.set(d, forKey: key(id)) }
@@ -248,6 +251,32 @@ final class PacketRecorder: ObservableObject {
         ble.logKeepAlives = true
         ble.logEveryStatus = true
         isRecording = true
+        marks = 0
+        // v5.0: written to disk as it records, so a crash doesn't lose the capture
+        AppJournal.shared.beginCapture(header: headerLines().joined(separator: "\n"))
+        AppJournal.shared.note("capture started: \(deviceLabel)")
+    }
+
+    /// v5.0: "I pressed ..." markers, so whoever reads the capture knows what each change was.
+    @Published private(set) var marks = 0
+    /// PINs the rider typed to mask in the export (kept in memory only, never saved).
+    var extraPins: [String] = []
+
+    func mark(_ label: String) {
+        guard isRecording else { return }
+        marks += 1
+        let text = "MARK #\(marks): pressed \(label) in the official app"
+        if let b = ble { b.info(text) } else {
+            record(LogEntry(time: Date(), kind: .info, channel: "--", raw: [], decoded: nil, note: text))
+        }
+    }
+
+    private func headerLines() -> [String] {
+        return ["HackTheScoot \(AppInfo.version) packet capture",
+                "device: \(deviceLabel)",
+                "started: \(startedAt.map { "\($0)" } ?? "-")",
+                "passwords are masked in this file (check before posting publicly)",
+                ""]
     }
 
     func stop() {
@@ -259,13 +288,20 @@ final class PacketRecorder: ObservableObject {
             b.logEveryStatus = f.1
         }
         savedFlags = nil
+        let stamp = Int((startedAt ?? Date()).timeIntervalSince1970)
+        savedFile = AppJournal.shared.finishCapture(footer: "stopped: \(stoppedAt.map { "\($0)" } ?? "-")  frames: \(frames.count)  marks: \(marks)", stamp: stamp)
+        AppJournal.shared.note("capture stopped: \(frames.count) frames")
     }
+
+    /// v5.0: the copy saved on this phone (Application Support/logs), kept for the last 10.
+    @Published private(set) var savedFile: URL?
 
     /// BLEManager calls this for every log line (passwords are already masked there).
     func record(_ e: LogEntry) {
         guard isRecording else { return }
         if frames.count >= maxFrames { dropped += 1; return }
         frames.append(e)
+        AppJournal.shared.appendCapture(e.exportLine)
     }
 
     var rxCount: Int { return frames.filter { $0.kind == .rx }.count }
@@ -275,11 +311,11 @@ final class PacketRecorder: ObservableObject {
         var lines = ["HackTheScoot \(AppInfo.version) packet capture",
                      "device: \(deviceLabel)",
                      "started: \(startedAt.map { "\($0)" } ?? "-")  stopped: \(stoppedAt.map { "\($0)" } ?? "still recording")",
-                     "frames: \(frames.count) (rx \(rxCount), tx \(txCount))\(dropped > 0 ? ", \(dropped) over the limit not kept" : "")",
+                     "frames: \(frames.count) (rx \(rxCount), tx \(txCount))\(dropped > 0 ? ", \(dropped) over the limit not kept" : ""), marks: \(marks)",
                      "passwords are masked in this file",
                      ""]
         lines += frames.map { $0.exportLine }
-        return lines.joined(separator: "\n")
+        return CaptureSanitizer.mask(lines.joined(separator: "\n"), pins: extraPins)
     }
 
     func exportURL() -> URL? {

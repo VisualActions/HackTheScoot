@@ -132,13 +132,24 @@ struct DashboardView: View {
                                    stale: stale, simulated: ble.isSimulating,
                                    intensity: theme.animationIntensity, night: theme.night))
         }
-        .accessibilityLabel("Speedometer")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ble.isSimulating ? "Speedometer, simulated" : "Speedometer")
+        .accessibilityValue(speedForVoiceOver)
+        .accessibilityAddTraits(.updatesFrequently)
         .contentShape(Rectangle())
         .onLongPressGesture(minimumDuration: 0.45) {
             if HapticsPref.on { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
             showQuick = true
         }
         .accessibilityAction(named: "Quick actions") { showQuick = true }
+    }
+
+    /// v5.0 VoiceOver: the speed in words, or why there is none.
+    private var speedForVoiceOver: String {
+        guard let st = ble.status, st.speed.isFinite else { return ble.isActive ? "waiting for data" : "not connected" }
+        let d = display(st.speed)
+        let unit = d.isMile ? "miles per hour" : "kilometers per hour"
+        return "\(Int(d.value.rounded())) \(unit)" + (gear.map { ", \($0.name) mode" } ?? "")
     }
 
     private var modeLine: some View {
