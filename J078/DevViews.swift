@@ -113,7 +113,7 @@ struct TerminalView: View {
         guard !cmd.isEmpty else { return }
         message = ""
         let lower = cmd.lowercased()
-        let pin = UserDefaults.standard.string(forKey: Keys.password) ?? "000000"
+        let pin = Keychain.get("parkPIN") ?? "000000"
         switch lower {
         case "clear": ble.clearLog()
         case "light on": ble.setLight(true)

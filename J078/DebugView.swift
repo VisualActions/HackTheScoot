@@ -8,35 +8,9 @@ struct ShareItem: Identifiable {
 
 struct DebugView: View {
     @ObservedObject var ble: BLEManager
-    @State private var page = 0
-    @AppStorage("devMode") private var devMode = false
-
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("", selection: $page) {
-                    Text("Packet log").tag(0)
-                    Text("Status bytes").tag(1)
-                    if devMode {
-                        Text("Terminal").tag(2)
-                        Text("Explore").tag(3)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 6)
-                if page == 0 {
-                    LogPage(ble: ble)
-                } else if page == 2 && devMode {
-                    TerminalView(ble: ble)
-                } else if page == 3 && devMode {
-                    ExperimentalView(ble: ble)
-                } else {
-                    StatusBytesPage(ble: ble)
-                }
-            }
-            .navigationTitle("Debug")
-            .navigationBarTitleDisplayMode(.inline)
+            DevLabView(ble: ble)
         }
     }
 }
@@ -100,6 +74,7 @@ struct LogRow: View {
         case .rx: return .green
         case .tx: return .orange
         case .info: return .secondary
+        case .blocked: return .red
         }
     }
 
@@ -161,11 +136,8 @@ struct StatusBytesPage: View {
                     row("Speed", String(format: "%.1f", s.speed) + " (scooter's unit)")
                     row("Gear", s.gear?.name ?? String(format: "unknown %02X", s.gearCode))
                     row("Flags", String(format: "%02X", s.flags) + " light \(s.light ? 1 : 0) park \(s.parked ? 1 : 0) start \(s.startModeBit ? 1 : 0) units \(s.unitsBit ? 1 : 0)")
-                    row("Battery?", s.batteryGuess.map { "\($0)" } ?? "--")
-                    row("Odo? bytes 23-26", Proto.hex(s.odometerBytes))
-                    if let le = s.odometerLE {
-                        row("Odo? as little-endian", "\(le)")
-                    }
+                    row("Byte 10 (battery? UNVERIFIED, raw)", s.byte10Raw.map { "\($0)" } ?? "--")
+                    row("Bytes 23-26 (odometer? UNVERIFIED, raw)", Proto.hex(s.bytes23to26Raw))
                     if let t = ble.lastStatusTime {
                         row("Last status", LogEntry.timeFormatter.string(from: t))
                     }

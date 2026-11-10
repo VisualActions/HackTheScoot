@@ -1,6 +1,7 @@
 name: J078
 options:
   bundleIdPrefix: com.example
+  developmentLanguage: en
   deploymentTarget:
     iOS: "16.0"
 targets:
@@ -12,13 +13,64 @@ targets:
       - path: J078
     settings:
       base:
+        # PRODUCT_NAME / bundle id kept on purpose: changing them makes iOS treat 5.0 as a
+        # different app (no in-place update, settings and trips not carried over).
+        # See RELEASE-CHECKLIST.md "Bundle id" for how to change it at App Store time.
         PRODUCT_NAME: J078
         PRODUCT_BUNDLE_IDENTIFIER: com.example.j078app
         INFOPLIST_FILE: Support/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
-        MARKETING_VERSION: "3.0.0"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "5.1.0"
+        CURRENT_PROJECT_VERSION: "9"
         ENABLE_BITCODE: NO
-    scheme: {}
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # v4.2 alternate app icons (More > App settings > App icon)
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Ember AppIcon-Mono AppIcon-Lime"
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+    scheme:
+      testTargets:
+        - J078Tests
+        - J078ViewTests
+      # Local StoreKit testing in Xcode (no Apple account needed). Ignored by the CI IPA.
+      storeKitConfiguration: Support/HackTheScoot.storekit
+  # Logic tests: compile the pure protocol / safety / trip code directly (no host app),
+  # so they run fast on any simulator and never touch Bluetooth.
+  J078Tests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Tests
+      - path: J078/Core
+      - path: J078/ProtocolAdapters
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.j078tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: NO
+    scheme:
+      testTargets:
+        - J078Tests
+        - J078ViewTests
+  # Screen smoke tests: hosted in the app, they build and lay out every screen
+  # (Controls included) with a simulated scooter, so a crash on open fails CI.
+  J078ViewTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ViewTests
+    dependencies:
+      - target: J078
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.j078viewtests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: NO
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/J078.app/J078"
+        BUNDLE_LOADER: "$(TEST_HOST)"

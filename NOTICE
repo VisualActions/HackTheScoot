@@ -1,0 +1,25 @@
+HackTheScoot
+Copyright 2026 Credence (VisualActions)
+
+This product includes HackTheScoot's own clean-room implementation of the
+Segway-Ninebot BLE "Encryption2" session crypto and pairing, written from the
+specification "segway-ninebot-ble" by NootNooot, licensed under the Apache
+License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0). The NOTICE
+of that work reads:
+
+    segway-ninebot-ble
+    Copyright 2026 NootNooot
+
+    This is an unofficial, independently developed implementation created
+    through reverse engineering for interoperability purposes. It is not
+    affiliated with, authorized by, endorsed by, or sponsored by Segway Inc.,
+    Ninebot, or any related entity. "Segway" and "Ninebot" are trademarks of
+    their respective owners and are used here only to identify the hardware
+    this software interoperates with.
+
+HackTheScoot is likewise not affiliated with, authorized by or endorsed by
+Segway-Ninebot, Xiaomi, KuKirin/Kugoo, Joyhis, Zydtech, VOLPAM or Fardriver.
+All names are trademarks of their owners and are used only to identify the
+hardware this app interoperates with.
+
+See ACKNOWLEDGEMENTS.md for every source and how it was used.

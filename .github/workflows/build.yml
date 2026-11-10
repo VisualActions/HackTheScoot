@@ -2,14 +2,89 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, v4-dev ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
+    name: Unit tests (simulator)
     runs-on: macos-latest
-    permissions:
-      contents: write
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+      # v5.0: no secrets and no GPL/AGPL code can ship (prints only file names, never matches)
+      - name: Secret scan
+        run: |
+          PAT='(sk|rk)_(live|test)_[0-9A-Za-z]{10,}|whsec_[0-9A-Za-z]{10,}|ghp_[0-9A-Za-z]{30,}|github_pat_[0-9A-Za-z_]{30,}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----'
+          if grep -rIlE --exclude-dir=.git "$PAT" . ; then
+            echo "::error::Something that looks like a secret key is in the files above. Remove it (keys belong in GitHub Actions secrets)."
+            exit 1
+          fi
+          echo "No secret keys found."
+      - name: License scan (no GPL / AGPL code in the app)
+        run: |
+          if grep -rIlE "GNU (AFFERO |LESSER )?GENERAL PUBLIC LICENSE" J078 Tests ViewTests ; then
+            echo "::error::GPL/AGPL text found in the app sources (files above)."
+            exit 1
+          fi
+          echo "No GPL/AGPL code in the app."
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        run: xcodegen generate
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          c=[(k,x) for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          c.sort(key=lambda p: p[0])
+          print(c[-1][1]["udid"])')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Simulator: $UDID"
+      - name: Run tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project J078.xcodeproj \
+            -scheme J078Tests \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build-tests \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log | grep -E "Test Case|error:|Executed|TEST (SUCCEEDED|FAILED)" || true
+          grep -q "TEST SUCCEEDED" test.log
+      - name: Errors as annotations
+        if: failure()
+        run: |
+          grep -E "error:|failed \(" test.log | sed -E 's#^/Users/runner/work/HackTheScoot/HackTheScoot/##' | awk '{k=tolower($0); if(!(k in s)){s[k]=1; print}}' | head -60 > errs.txt || true
+          split -l 6 errs.txt chunk_ || true
+          for f in chunk_*; do [ -f "$f" ] && echo "::error::$(sed ':a;N;$!ba;s/\n/%0A/g' "$f")"; done || true
+      - name: Test report
+        if: always()
+        run: |
+          PASSED=$(grep -cE "Test Case '.*' passed" test.log || true)
+          FAILED=$(grep -cE "Test Case '.*' failed" test.log || true)
+          echo "::notice title=Test report::${PASSED} test cases passed, ${FAILED} failed"
+          grep -E "Test Suite '[A-Za-z0-9]+\.xctest' (passed|failed)|Executed [0-9]+ test" test.log | sed 's/^[[:space:]]*//' > bundles.txt || true
+          echo "::notice title=Test bundles::$(sed ':a;N;$!ba;s/\n/%0A/g' bundles.txt)"
+          grep -E "Test Suite '.*' (passed|failed)" test.log | sed -E "s/^.*Test Suite '([^']+)' (passed|failed).*/\1 \2/" | sort -u | grep -v -E "^(All tests|Selected tests|J078Tests.xctest) " | head -40 > suites.txt || true
+          echo "::notice title=Test suites::$(sed ':a;N;$!ba;s/\n/%0A/g' suites.txt)"
+          echo "## Test report" >> "$GITHUB_STEP_SUMMARY"
+          grep -E "Executed [0-9]+ tests" test.log | tail -1 >> "$GITHUB_STEP_SUMMARY" || true
+          grep -E "error:|failed" test.log | head -50 >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: test.log
+
+  build:
+    name: Build IPA
+    runs-on: macos-latest
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -39,7 +114,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Show build errors
+        if: failure()
+        run: |
+          grep -E "error:" build.log | sed -E 's#^/Users/runner/work/HackTheScoot/HackTheScoot/##' | awk '{k=tolower($0); if(!(k in s)){s[k]=1; print}}' | head -60 > errs.txt || true
+          split -l 6 errs.txt chunk_ || true
+          for f in chunk_*; do [ -f "$f" ] && echo "::error::$(sed ':a;N;$!ba;s/\n/%0A/g' "$f")"; done || true
 
       - name: Package Payload/ into an .ipa
         run: |
@@ -48,24 +131,73 @@ jobs:
           rm -rf Payload
           mkdir Payload
           cp -R "$APP" Payload/
-          zip -qry J078-unsigned.ipa Payload
-          ls -lh J078-unsigned.ipa
+          zip -qry HackTheScoot-unsigned.ipa Payload
+          ls -lh *.ipa
 
       - name: Upload the .ipa
         uses: actions/upload-artifact@v4
         with:
-          name: J078-unsigned-ipa
-          path: J078-unsigned.ipa
+          name: HackTheScoot-unsigned-ipa
+          path: HackTheScoot-unsigned.ipa
           if-no-files-found: error
 
+  # Publishing waits for BOTH the tests and the build: a red test never ships.
+  publish:
+    name: Publish release
+    needs: [test, build]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v4-dev')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: HackTheScoot-unsigned-ipa
+      - run: cp HackTheScoot-unsigned.ipa HackTheScoot-5.1.0-beta-unsigned.ipa && ls -lh *.ipa
+
+      # One-off repair (5.1): the 5.0 prerelease (v5-beta) lost its .ipa by mistake during the 5.1
+      # work. The release and its tag (on 4e3c399) were re-made by hand; this puts the 5.0 build
+      # of 4e3c399 (CI run 42859299928) back on it if it's missing. Does nothing once it's there.
+      # Never touches "latest".
+      - name: Restore the 5.0 beta .ipa if it is missing
+        if: github.ref == 'refs/heads/v4-dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v5-beta --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null | grep -q '^HackTheScoot-5.0.0-beta-unsigned.ipa$'; then echo "v5-beta has its .ipa, nothing to do."; exit 0; fi
+          if ! gh release view v5-beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::warning::v5-beta release is missing; not re-creating it from CI."; exit 0; fi
+          mkdir -p restore50
+          gh run download 42859299928 --repo "$GITHUB_REPOSITORY" -n HackTheScoot-unsigned-ipa -D restore50
+          test -f restore50/HackTheScoot-unsigned.ipa
+          cp restore50/HackTheScoot-unsigned.ipa restore50/HackTheScoot-5.0.0-beta-unsigned.ipa
+          gh release upload v5-beta restore50/HackTheScoot-5.0.0-beta-unsigned.ipa --repo "$GITHUB_REPOSITORY" --clobber || echo "::warning::could not upload the 5.0 .ipa to v5-beta"
+
+      # Stable: only main publishes "latest" (v3 stays the stable download until the v5 PR is merged).
       - name: Publish the .ipa to the "latest" GitHub Release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest J078-unsigned.ipa \
+          gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create latest HackTheScoot-unsigned.ipa \
             --target "$GITHUB_SHA" \
-            --title "Latest build" \
-            --notes "Unsigned HackTheScoot v3 IPA built from ${GITHUB_SHA::7}. Sideload it the same way as the README says." \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "HackTheScoot (latest)" \
+            --notes "Unsigned HackTheScoot IPA built from ${GITHUB_SHA::7}, after the tests passed. Sideload it the way the README says." \
             --latest
+
+      # Beta: v4-dev publishes a separate PRERELEASE, never touching "latest".
+      # 5.1: the tag is v5.1-beta. The 5.0 prerelease (v5-beta) and 4.2 (v4-beta) are left as they are.
+      - name: Publish the v5.1 beta prerelease
+        if: github.ref == 'refs/heads/v4-dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete v5.1-beta --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create v5.1-beta HackTheScoot-5.1.0-beta-unsigned.ipa \
+            --target "$GITHUB_SHA" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "HackTheScoot 5.1.0 beta (experimental KuKirin, Xiaomi, Ninebot)" \
+            --notes "Unsigned 5.1.0 BETA (build 9) built from ${GITHUB_SHA::7} on v4-dev, after the secret scan, the license scan, the unit tests and the screen tests (every screen, including the new 5.1 ones) passed. New, all EXPERIMENTAL and UNTESTED ON HARDWARE (they should work, but nobody has tried them on a real scooter yet): KuKirin G2 (2026) and G4 live data (read-only, nothing is ever written to a KuKirin); Xiaomi M365 (plain Bluetooth firmware) live data plus KERS, cruise and tail light, each read first, confirmed and read back; HackTheScoot's own clean-room Ninebot pairing (from the Apache-2.0 NootNooot spec) for the Max G30 and the M365 Pro, Pro 2, 1S and Essential; Max G30 live data plus cruise control; Ninebot and Xiaomi error-code explanations. Never sent: firmware, power off, reboot, lock, PIN, serial, speed-limit or battery commands. No firmware flashing. Nothing from 5.0 was removed or capped; the J078 and Volpam controls are unchanged. See CHANGELOG.md and ACKNOWLEDGEMENTS.md. The stable v3 build stays on the 'latest' release." \
+            --prerelease --latest=false

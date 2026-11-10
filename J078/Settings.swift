@@ -111,21 +111,3 @@ func speedFontDesign(_ s: String) -> Font.Design {
     }
 }
 
-/// Speed in the unit the user wants to see. The scooter reports speed x10 in its
-/// own current unit (mph while it is set to mile).
-struct SpeedDisplay {
-    let value: Double
-    let unit: String
-    let isMile: Bool
-
-    static func make(raw: Double, scooterIsMile: Bool, display: String) -> SpeedDisplay {
-        switch display {
-        case "mph":
-            return SpeedDisplay(value: scooterIsMile ? raw : raw * 0.621371, unit: "mph", isMile: true)
-        case "kmh":
-            return SpeedDisplay(value: scooterIsMile ? raw / 0.621371 : raw, unit: "km/h", isMile: false)
-        default:
-            return SpeedDisplay(value: raw, unit: scooterIsMile ? "mph" : "km/h", isMile: scooterIsMile)
-        }
-    }
-}

@@ -1,0 +1,32 @@
+name: Stripe test setup
+
+# Creates (or finds) the TEST-mode Pro products, prices and Payment Links with the
+# STRIPE_SECRET_KEY repo secret and prints only the public test URLs.
+# Never runs on main, never in live mode (the script refuses non-test keys).
+on:
+  push:
+    branches: [ v4-dev ]
+    paths:
+      - '.github/stripe/**'
+      - '.github/workflows/stripe-test-setup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stripe-test:
+    name: Create Stripe test links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create or find the test products, prices and Payment Links
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: python3 .github/stripe/setup_test_links.py
+      - name: Keep the public link list
+        uses: actions/upload-artifact@v4
+        with:
+          name: stripe-test-links
+          path: stripe-test-links.json
+          if-no-files-found: ignore

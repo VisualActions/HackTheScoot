@@ -4,6 +4,10 @@ import CoreBluetooth
 // J078 protocol, decoded on Nov 9 2026 from Credence's own Bluetooth captures
 // (iPhone sysdiagnose, the 365 app talking to his J078). Things marked
 // VERIFIED were seen on his scooter. Things marked UNVERIFIED are best guesses.
+//
+// v4: this file is Foundation + CoreBluetooth only (no SwiftUI), so the unit
+// tests compile it directly. Every parser checks the length before it reads a
+// byte, and every frame the app can send has a safety level (see CommandSafety).
 
 // MARK: - Gears
 
@@ -92,9 +96,10 @@ enum Gear: Int, CaseIterable, Identifiable, Codable {
     /// mph for a km/h limit: the scooter's own mph table when it matches the capture.
     static func mph(for gear: Gear, kmh: Int) -> Int {
         if kmh == gear.capturedLimitKmh { return gear.capturedTopMph }
-        return Int((Double(kmh) * 0.621371).rounded())
+        return Int((Double(kmh) * Units.mphPerKmh).rounded())
     }
 
+    /// The limits his scooter reported on Nov 9 (km/h). VERIFIED (= 4 / 8 / 11 / 19 mph).
     var capturedLimitKmh: Int {
         switch self {
         case .walk: return 6
@@ -103,6 +108,37 @@ enum Gear: Int, CaseIterable, Identifiable, Codable {
         case .sport: return 31
         }
     }
+
+    /// The factory (stock) limit for this mode: what his scooter reported on Nov 9.
+    /// (Nov 9 15:23: the 365 app asked sport = 32 and the scooter itself kept 31.)
+    var factoryMaxKmh: Int { return capturedLimitKmh }
+
+    /// v4.0.1: the v3 above-stock range is back. Every mode can ask 6...45 km/h, but
+    /// anything above the stock limit needs the one-time warning (same gate as v3).
+    /// The scooter clamps what it won't take; the app shows what it actually accepted.
+    static let absoluteMinKmh = 6
+    static let absoluteMaxKmh = 45
+    var fullRange: ClosedRange<Int> { return Gear.absoluteMinKmh...Gear.absoluteMaxKmh }
+
+    /// Slider range for this mode: stock only, or 6...45 once above-stock is accepted.
+    /// Always at least 1 km/h wide (a zero-width SwiftUI Slider crashes, that was the v4.0.0 Controls crash).
+    func sliderRange(aboveStock: Bool) -> ClosedRange<Int> {
+        let top = aboveStock ? Gear.absoluteMaxKmh : max(factoryMaxKmh, Gear.absoluteMinKmh + 1)
+        return Gear.absoluteMinKmh...top
+    }
+
+    /// Lowest limit the app will ask for. Walk is fixed at its factory 6 km/h.
+    var minLimitKmh: Int {
+        switch self {
+        case .walk: return 6
+        default: return 6
+        }
+    }
+
+    var limitRange: ClosedRange<Int> { return minLimitKmh...factoryMaxKmh }
+
+    /// Walk has nothing to adjust (min == max), so its slider is hidden.
+    var limitAdjustable: Bool { return minLimitKmh < factoryMaxKmh }
 }
 
 // MARK: - Scooter kinds (auto-detected)
@@ -137,7 +173,10 @@ enum ScooterKind: String, Codable, CaseIterable, Identifiable {
 // MARK: - Live status
 
 struct ScooterStatus: Equatable {
+    /// Unscrambled bytes, kept whole so nothing is lost.
     var decoded: [UInt8]
+    /// Bytes exactly as they came over the air (nil for frames that never had an air form).
+    var raw: [UInt8]? = nil
     var flags: UInt8
     var gearCode: UInt8
     var gear: Gear?
@@ -147,18 +186,40 @@ struct ScooterStatus: Equatable {
     var parked: Bool { flags & 0x04 != 0 }       // VERIFIED
     var startModeBit: Bool { flags & 0x10 != 0 } // VERIFIED it follows cmd 07; meaning UNVERIFIED
     var unitsBit: Bool { flags & 0x01 != 0 }     // VERIFIED it follows cmd 01; meaning UNVERIFIED
+    /// Live speed in the scooter's CURRENT display unit (mph while it is set to mile). VERIFIED.
     var speed: Double { Double(speedTenths) / 10.0 }
 
-    /// Byte 10 (0x64 = 100 while he captured). UNVERIFIED: battery %.
-    var batteryGuess: Int? { decoded.count > 10 ? Int(decoded[10]) : nil }
+    /// Any byte, bounds-checked.
+    func byte(_ i: Int) -> UInt8? { return i >= 0 && i < decoded.count ? decoded[i] : nil }
 
-    /// Bytes 23-26 (D0 97 01 00 while he captured). UNVERIFIED: odometer?
-    var odometerBytes: [UInt8] { decoded.count >= 27 ? Array(decoded[23...26]) : [] }
+    /// Byte 10 read 0x64 (100) in every capture. It MIGHT be battery %, but it never
+    /// moved, so v4 does not show it as a battery value. Raw only (Developer Lab).
+    var byte10Raw: UInt8? { return byte(10) }
 
-    var odometerLE: UInt32? {
-        let b = odometerBytes
-        guard b.count == 4 else { return nil }
-        return UInt32(b[0]) | (UInt32(b[1]) << 8) | (UInt32(b[2]) << 16) | (UInt32(b[3]) << 24)
+    /// Bytes 23-26 (D0 97 01 00 in every capture). Might be an odometer, never seen
+    /// changing, unit unknown. Raw only. v4 shows "unavailable" for the odometer.
+    var bytes23to26Raw: [UInt8] { decoded.count >= 27 ? Array(decoded[23...26]) : [] }
+}
+
+/// Data we have NOT been able to verify. The UI uses this to say "unavailable"
+/// instead of showing a guess as a fact.
+enum UnverifiedData: String, CaseIterable {
+    case battery = "Battery %"
+    case odometer = "Odometer"
+    case firmware = "Firmware version"
+    case errors = "Error codes"
+    case temperature = "Motor / controller temperature"
+    case voltage = "Battery voltage"
+
+    var why: String {
+        switch self {
+        case .battery: return "Status byte 10 read 100 in every capture and never moved. Not proven to be battery."
+        case .odometer: return "Bytes 23-26 never changed in any capture; unit unknown."
+        case .firmware: return "No firmware/version reply has been captured from the J078."
+        case .errors: return "The 365 app has a fault-code reply (DB EB 20 B0) but none was ever captured."
+        case .temperature: return "No temperature field has been identified."
+        case .voltage: return "No voltage field has been identified."
+        }
     }
 }
 
@@ -283,37 +344,47 @@ enum Proto {
 
     // MARK: Frames scooter -> app (decoded)
 
+    /// Status frames were 29 bytes in every capture. Anything shorter than 9 cannot
+    /// hold the speed; anything over 64 is not a status frame.
+    static let statusMinLength = 9
+    static let statusMaxLength = 64
+
     static func parseStatus(_ d: [UInt8]) -> ScooterStatus? {
-        guard d.count >= 9, d[0] == 0xDB, d[1] == 0xEB, d[2] == 0xFA, d[3] == 0xDB else { return nil }
+        guard d.count >= statusMinLength, d.count <= statusMaxLength,
+              d[0] == 0xDB, d[1] == 0xEB, d[2] == 0xFA, d[3] == 0xDB else { return nil }
         let speed = (Int(d[7]) << 8) | Int(d[8])   // big-endian, x10. VERIFIED (byte 8; byte 7 stayed 0)
         return ScooterStatus(decoded: d, flags: d[4], gearCode: d[5], gear: Gear.fromStatus(d[5]), speedTenths: speed)
     }
 
     /// DB EB BA [x] [kmh] = that gear's speed limit in km/h. VERIFIED.
     static func parseLimit(_ d: [UInt8]) -> (Gear, Int)? {
-        guard d.count >= 5, d[0] == 0xDB, d[1] == 0xEB, d[2] == 0xBA, let g = Gear.fromLimitCode(d[3]) else { return nil }
+        guard d.count >= 5, d.count <= 20, d[0] == 0xDB, d[1] == 0xEB, d[2] == 0xBA,
+              d[3] & 0x0F == 0x0A, let g = Gear.fromLimitCode(d[3]) else { return nil }
         return (g, Int(d[4]))
     }
 
     /// Speed-limit write (decoded form): BD BE AB [gear byte] [kmh]. VERIFIED for sport (A2).
-    static func setLimit(_ gear: Gear, kmh: Int) -> [UInt8] {
-        let v = UInt8(max(1, min(0xFE, kmh)))   // FF is the keep-alive filler, never send it as a speed
-        return [0xBD, 0xBE, 0xAB, gear.limitByte, v]
+    /// Returns nil (nothing to send) outside 6...45 km/h. Above the stock limit is
+    /// allowed (v3 behaviour, behind the one-time warning in the UI); the scooter clamps it.
+    static func setLimit(_ gear: Gear, kmh: Int) -> [UInt8]? {
+        guard gear.fullRange.contains(kmh) else { return nil }
+        return [0xBD, 0xBE, 0xAB, gear.limitByte, UInt8(kmh)]
     }
 
     /// Ack to a speed-limit write: DB EB BA [gear byte] [kmh the scooter actually set]. VERIFIED (A2).
     /// Nov 9 15:23: the 365 app asked A2 20 (32 km/h), the scooter acked A2 1F (kept 31).
     static func parseLimitAck(_ d: [UInt8]) -> (Gear, Int)? {
-        guard d.count >= 5, d[0] == 0xDB, d[1] == 0xEB, d[2] == 0xBA, let g = Gear.fromLimitByte(d[3]) else { return nil }
+        guard d.count >= 5, d.count <= 20, d[0] == 0xDB, d[1] == 0xEB, d[2] == 0xBA, let g = Gear.fromLimitByte(d[3]) else { return nil }
         return (g, Int(d[4]))
     }
 
+    /// Exactly DB EB CA CA FF. VERIFIED. This is the ONLY thing that unlocks park.
     static func isPasswordOK(_ d: [UInt8]) -> Bool {
-        return d.count >= 5 && d[0] == 0xDB && d[1] == 0xEB && d[2] == 0xCA && d[3] == 0xCA && d[4] == 0xFF
+        return d.count >= 5 && d.count <= 8 && d[0] == 0xDB && d[1] == 0xEB && d[2] == 0xCA && d[3] == 0xCA && d[4] == 0xFF
     }
 
     static func isPasswordWrong(_ d: [UInt8]) -> Bool {
-        return d.count >= 5 && d[0] == 0xDB && d[1] == 0xEB && d[2] == 0xCA && d[3] == 0xCA && d[4] == 0xAA
+        return d.count >= 5 && d.count <= 8 && d[0] == 0xDB && d[1] == 0xEB && d[2] == 0xCA && d[3] == 0xCA && d[4] == 0xAA
     }
 
     /// Label for a decoded J078 frame, for the log.
@@ -364,7 +435,8 @@ enum Proto {
     static let volpamHeartbeat: [UInt8] = [0xA5, 0x02, 0xFD, 0x5A]
     static let volpamHeartbeatInterval: TimeInterval = 0.5
 
-    /// CRC16-Modbus (init FFFF, poly A001 reflected). Used only for hints.
+    /// CRC16-Modbus (init FFFF, poly A001 reflected). v4: CONFIRMED on the Volpam,
+    /// it reproduces all 25 distinct frames in the 17:46 capture byte-for-byte.
     static func crc16Modbus(_ data: [UInt8]) -> UInt16 {
         var crc: UInt16 = 0xFFFF
         for b in data {
@@ -401,13 +473,8 @@ enum Proto {
         return bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
     }
 
-    static func kmhToMph(_ v: Double) -> Double { return v * 0.621371 }
+    static func kmhToMph(_ v: Double) -> Double { return Units.kmhToMph(v) }
 
-    // MARK: NOT DONE ON PURPOSE: speed-limit writes
-    //
-    // No speed-limit command has been captured on the J078. The Modbus
-    // 01 10 register writes in the vendor app belong to the other (F1F1)
-    // channel and are unverified. Nothing here sends a guessed write.
-    // Next step: in the 365 app, change a speed setting once while the
-    // Bluetooth log runs, then capture, and add the decoded frame here.
+    // MARK: Volpam
+    // The Volpam protocol (CRC16-Modbus framed, F1F1 / F2F1) lives in VolpamProtocol.swift.
 }
