@@ -77,9 +77,9 @@ final class NinebotTests: XCTestCase {
 
     func testFrameShapeAndChecksum() {
         // Protocol 2 read request shape: 5A A5 LEN 3E TARGET CMD INDEX payload, then the
-        // inverted sum of LEN..payload, low byte first (0x110 -> 0xFEEF -> EF FE).
+        // inverted sum of LEN..payload, low byte first (0x130 -> 0xFECF -> CF FE).
         let f = NinebotProto.makeFrame(target: 0x20, cmd: 0x01, index: 0xB0, payload: [0x20])
-        XCTAssertEqual(f, [0x5A, 0xA5, 0x01, 0x3E, 0x20, 0x01, 0xB0, 0x20, 0xEF, 0xFE])
+        XCTAssertEqual(f, [0x5A, 0xA5, 0x01, 0x3E, 0x20, 0x01, 0xB0, 0x20, 0xCF, 0xFE])
         guard case .frame(let fr) = NinebotProto.parse(f) else { return XCTFail("rejected") }
         XCTAssertEqual(fr.index, 0xB0)
         XCTAssertEqual(fr.payload, [0x20])
