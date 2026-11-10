@@ -200,6 +200,7 @@ struct RideShareCard: View {
 }
 
 enum ShareCardRenderer {
+    @MainActor
     static func render(trip: Trip, mph: Bool, accent: Color) -> URL? {
         let r = ImageRenderer(content: RideShareCard(trip: trip, mph: mph, accent: accent))
         r.scale = 3

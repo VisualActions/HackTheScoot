@@ -76,6 +76,7 @@ final class NewScreenTests42: XCTestCase {
         ble.stopSimulation()
     }
 
+    @MainActor
     func testShareCardAndMaintenance() {
         let trip = sampleTrip()
         render(RideShareCard(trip: trip, mph: true, accent: .orange), "Share card (mph)")
