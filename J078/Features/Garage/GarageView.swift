@@ -228,6 +228,7 @@ struct GarageDetailView: View {
                     Label("Live data only. Needs a capture to unlock controls.", systemImage: "lock.shield").foregroundColor(.orange)
                     NavigationLink { PacketLoggerView(ble: ble) } label: { Label("Start the packet logger", systemImage: "record.circle") }
                         .simultaneousGesture(TapGesture().onEnded { if !PacketRecorder.shared.isRecording { PacketRecorder.shared.start(ble: ble) } })
+                    NavigationLink { CaptureGuideView(ble: ble) } label: { Label("Help unlock it (capture tutorial)", systemImage: "lock.open") }
                 }
             }
             Section("Care") {

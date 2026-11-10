@@ -1,0 +1,95 @@
+name: New vehicle capture
+description: Send a Bluetooth capture so a new scooter or e-bike can be supported (read CAPTURES.md first).
+title: "Capture: (brand model)"
+labels: ["capture", "new vehicle"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping! How to record one: [CAPTURES.md](https://github.com/VisualActions/HackTheScoot/blob/v4-dev/CAPTURES.md), or in the app: More > Help unlock your scooter or e-bike.
+
+        **Issues are public. Never post a password or PIN.** HackTheScoot masks the ones it knows, but check the file before you attach it. A full iPhone sysdiagnose holds a lot of personal info: attach only the Bluetooth part (`bluetoothd-hci-latest.pklg`), or ask in the issue for a private way to send it.
+  - type: input
+    id: brand
+    attributes:
+      label: Brand
+      placeholder: e.g. Hiboy, Segway-Ninebot, Kugoo, a no-name e-bike
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: e.g. S2 Pro, Max G30, ND72530 controller
+    validations:
+      required: true
+  - type: dropdown
+    id: vehicle
+    attributes:
+      label: Vehicle type
+      options:
+        - E-scooter
+        - E-bike
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: controller
+    attributes:
+      label: Controller (if known)
+      description: What HackTheScoot's Garage or the official app says, or what's printed on the controller.
+      placeholder: e.g. Fardriver ND72450, Zydtech, Ninebot, Joyhis / 365, unknown
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version (if known)
+      placeholder: e.g. 1.5.2 (from the official app's settings / about screen)
+  - type: input
+    id: official_app
+    attributes:
+      label: Official app name and version
+      placeholder: e.g. Segway-Ninebot 6.4.1
+  - type: dropdown
+    id: method
+    attributes:
+      label: How was it captured?
+      multiple: true
+      options:
+        - HackTheScoot packet logger (quick route)
+        - iPhone Bluetooth logging profile + sysdiagnose (advanced route)
+        - Other (say below)
+    validations:
+      required: true
+  - type: textarea
+    id: pressed
+    attributes:
+      label: What you pressed, in order
+      description: One per line, with the time if you have it. Same order as the MARK lines in the file.
+      placeholder: |
+        16:02:10 lights on
+        16:02:15 lights off
+        16:02:20 mode 1 -> 2
+        16:02:25 speed limit 25 -> 20 km/h
+        16:02:30 park on
+        16:02:35 park off
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Capture file
+      description: Drag the .txt (packet logger) or .pklg (sysdiagnose Bluetooth log) here. Zip it if GitHub refuses the file type.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Region / version of the vehicle, what HackTheScoot showed, anything odd.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I checked that what I'm posting has no password, PIN or personal info in it.
+          required: true

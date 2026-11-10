@@ -190,6 +190,7 @@ final class FaultAndMiscTests: XCTestCase {
     func testStripeTestReturnLink() {
         XCTAssertEqual(ProReturnLink.plan(from: URL(string: "hackthescoot://pro-test?plan=yearly")!), "yearly")
         XCTAssertEqual(ProReturnLink.plan(from: URL(string: "hackthescoot://pro-test")!), "test")
+        XCTAssertEqual(ProReturnLink.plan(from: URL(string: "hackthescoot://pro-test?plan=pro_monthly")!), "monthly", "the Stripe link's own plan key")
         XCTAssertEqual(ProReturnLink.plan(from: URL(string: "hackthescoot://pro-test?plan=lifetime")!), "test")
         XCTAssertNil(ProReturnLink.plan(from: URL(string: "https://example.com/pro-test?plan=yearly")!))
         XCTAssertNil(ProReturnLink.plan(from: URL(string: "hackthescoot://something-else")!))

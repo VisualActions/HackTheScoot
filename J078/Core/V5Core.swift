@@ -381,7 +381,8 @@ enum ProReturnLink {
     /// hackthescoot://pro-test?plan=monthly (the download page's thank-you page opens this).
     static func plan(from url: URL) -> String? {
         guard url.scheme?.lowercased() == scheme, url.host?.lowercased() == "pro-test" else { return nil }
-        let plan = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "plan" }?.value ?? "test"
+        let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "plan" }?.value ?? "test"
+        let plan = raw.hasPrefix("pro_") ? String(raw.dropFirst(4)) : raw
         let ok = ["monthly", "yearly", "test"]
         return ok.contains(plan) ? plan : "test"
     }

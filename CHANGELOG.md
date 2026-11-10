@@ -1,5 +1,17 @@
 # Changelog
 
+## 5.0.0 beta (build 8): public release candidate
+
+Built and tested in CI (simulator). Not yet tried on a real phone, scooter or e-bike. Nothing from 4.2 was removed or capped. Published as the `v5-beta` prerelease; `latest` is still v3.
+
+- **Capture tutorial** "Help unlock your scooter or e-bike": quick route (packet logger + official app, one press at a time, 5 s pauses, "I pressed..." MARK buttons) and advanced route (Apple's Bluetooth logging profile + sysdiagnose, steps checked against Apple's docs, "stacks only = didn't start"). Reachable from the read-only vehicle screen, Help, the packet logger and More. Send screen: mask a PIN, share sheet, email, prefilled GitHub issue. "Find vehicles already connected to this phone" (listen-only).
+- Repo: `CAPTURES.md`, `.github/ISSUE_TEMPLATE/new-vehicle-capture.yml`, `RELEASE-CHECKLIST.md`; download page "Contribute a capture" section.
+- New (all free): opt-in GPS route maps, ride search + filters, battery and range estimates (labelled estimated), vehicle info / firmware (read-only Device Information), fault explanations, compatibility checker, backup / restore (JSON), what's new, DRAFT privacy policy and terms + open-source credits, crash-safe capture file + app log, light/system appearance for the tab bar, VoiceOver labels, English + first Spanish strings.
+- Stripe TEST return link: the test checkout's thank-you page opens `hackthescoot://pro-test`, which turns on a labelled, unverified test unlock.
+- Release readiness: 5.0.0 build 8, IPA named `HackTheScoot-unsigned.ipa` / `HackTheScoot-5.0.0-beta-unsigned.ipa`, `PrivacyInfo.xcprivacy`, CI secret scan and license scan. Bundle id unchanged on purpose (see RELEASE-CHECKLIST.md).
+- Deferred: widgets / Live Activity (App Group = paid team), a verified Stripe unlock (needs a server), real App Store purchases (adult account + signed build), writes to Fardriver / Ninebot / unknown vehicles (need captures), full translations.
+- Tests: V50Tests (capture steps, masking, ride filter, route math, estimates, faults, what's new, return link, backup, journal) and NewScreenTests50 (every new screen, portrait + landscape, dark + light).
+
 ## 4.2.0 beta (build 7): feature pack, e-bikes, Fardriver + Ninebot (read-only)
 
 Built and tested in CI (simulator). Not yet tried on a real phone, scooter or e-bike. Nothing from 4.1 was removed or capped.

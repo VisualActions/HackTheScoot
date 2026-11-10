@@ -1,14 +1,51 @@
-# HackTheScoot (v4.2 beta)
+# HackTheScoot (v5.0 beta, public release candidate)
 
-An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Volpam**). Everything it does on the J078 was decoded from real Bluetooth captures of the 365 app on Nov 9 2026. Nothing is guessed silently: every feature below says how sure we are.
+An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Volpam**), plus read-only support for new brands until someone sends a capture. Everything it does on the J078 was decoded from real Bluetooth captures of the 365 app on Nov 9 2026. Nothing is guessed silently: every feature below says how sure we are.
 
-> **Stable vs beta.** `main` is v3, the stable build (release **latest**). v4 lives on the `v4-dev` branch and is published as the separate prerelease **v4-beta** only after the unit tests pass. Merging the v4 PR is what makes v4 stable.
+> **Stable vs beta.** `main` is v3, the stable build (release **latest**). v5 lives on the `v4-dev` branch (PR #2) and is published as the separate prerelease **v5-beta** only after the secret scan, license scan, unit tests and screen tests pass. Merging PR #2 is what makes v5 the main download: see [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
 
 Downloads:
-- Stable v3: https://github.com/VisualActions/HackTheScoot/releases/latest/download/J078-unsigned.ipa
-- v4 beta: https://github.com/VisualActions/HackTheScoot/releases/download/v4-beta/HackTheScoot-v4-beta-unsigned.ipa
+- Stable v3: https://github.com/VisualActions/HackTheScoot/releases/latest
+- v5 beta: https://github.com/VisualActions/HackTheScoot/releases/download/v5-beta/HackTheScoot-5.0.0-beta-unsigned.ipa
+- Older 4.2 beta: https://github.com/VisualActions/HackTheScoot/releases/tag/v4-beta
 
-## What's new in 4.2 (beta)
+**Got a scooter or e-bike that isn't supported?** Send a capture: [CAPTURES.md](CAPTURES.md), or in the app More > Help unlock your scooter or e-bike.
+
+## What's new in 5.0 (beta)
+
+Built and tested in CI (simulator). Not tried on a real phone, scooter or e-bike yet, so everything that touches hardware *should* work but is unproven. Nothing from 4.2 was removed or capped (6-45 km/h sliders behind the warning, the 4.0.1 Bluetooth flow, the terminal, Garage, intro, Pro test mode and every 4.2 feature are all as before). Everything below is free.
+
+- **Capture tutorial: "Help unlock your scooter or e-bike"** (More > Vehicle, Help, the packet logger and every read-only vehicle screen). Two routes, step by step:
+  - **Quick:** start the packet logger, connect, press one thing at a time in the brand's official app with a 5-second pause, tap **I pressed...** after each (it writes a `MARK` line into the capture), stop, share.
+  - **Advanced:** Apple's Bluetooth logging profile + a sysdiagnose (both directions of the Bluetooth traffic), checked against Apple's own instructions. Includes "only stacks files = it didn't start".
+  - **Send a capture** screen: mask a PIN, share sheet, email, or a prefilled GitHub **New vehicle capture** issue (`.github/ISSUE_TEMPLATE/new-vehicle-capture.yml`).
+  - **Find vehicles already connected to this phone** (Connect): lists a vehicle the official app is connected to, so HackTheScoot can listen at the same time. Listening only.
+  - Honest limit: iPhone apps can't see what another app sends, so the quick route records the vehicle's replies; the advanced route has both directions.
+- **GPS route maps** (opt-in, More > App settings > GPS routes): each real ride saves its route while the app is open (no background location) and shows it on a map in the ride. Stays on the phone; GPX export (Pro) now has data.
+- **Ride history search and filters** (Trips): search by vehicle, date or mode; filter by vehicle, time, real or simulated, and rides with a route.
+- **Battery and range estimates** (More > Ride): labelled **estimated** everywhere. From Fardriver charge or volts (pick the pack voltage), Ninebot battery, or a battery % you set (the J078 / Volpam readings are still unverified), times your own full-charge range and the riding mode.
+- **Vehicle info and firmware** (More > Vehicle): adapter, support level, signal, services, and the standard Device Information values (firmware, hardware, model) when the vehicle shares them. Read only when you tap "Read device info"; serial numbers are hidden.
+- **Fault explanations**: tap a Fardriver warning to see what it usually means and what to check (general guidance, marked unverified). J078 / Volpam faults: none decoded, none made up.
+- **Compatibility checker** (free): search the compatibility database before you buy.
+- **Backup and restore**: settings, Garage, maintenance, themes, layouts and (optionally) trips as one JSON file. Passwords, PINs, photos and the test unlock are never included. Restoring adds trips, never deletes them.
+- **What's new** screen, shown once after updating.
+- **Privacy policy and terms of use**: DRAFTS from the research outlines, clearly marked as needing an adult and a legal review. Plus **open-source credits**.
+- **Crash-safe logging**: the packet logger writes to disk as it records (an unfinished capture is offered back after a crash), and a small app log (More > App log) notes connects and phases and flags when the last session ended unexpectedly. Local only, passwords masked.
+- **Appearance**: dark / light / system in App settings (the tab bar now follows light mode too).
+- **Accessibility**: VoiceOver reads the dashboard speed and mode, every new screen has labels, lists use Dynamic Type.
+- **Localization scaffolding**: English + a first Spanish pass of the main screens (iOS Settings > HackTheScoot > Language).
+- **Stripe TEST return link**: after the test checkout, the thank-you page has "Open HackTheScoot", which turns on Pro as a labelled **test** unlock. It isn't verified (that needs the server), so it's for testing the flow only.
+- **Release readiness**: version 5.0.0 (build 8), the IPA is named `HackTheScoot-...ipa`, a privacy manifest (`PrivacyInfo.xcprivacy`), CI secret and license scans, and [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
+
+### Deferred in 5.0 (and why)
+- **Widgets and Live Activity**: still not shipped. Both need a widget extension, and sharing ride data with it needs an App Group, which needs a paid Apple Developer team; free-Apple-ID sideloading usually drops extensions too. Possible after the adult enrolls (RELEASE-CHECKLIST.md B).
+- **A Stripe payment securely unlocking Pro**: needs a small server (webhook + entitlement) holding the secret key. The 5.0 return link is TEST and unverified.
+- **Real App Store purchases**: need App Store Connect (adult account) and a signed build.
+- **Writes to Fardriver, Ninebot or unknown vehicles**: need captures. Fardriver road speed needs wheel size from a capture.
+- **Bundle id rename**: kept as `com.example.j078app` so existing installs update in place; how to change it at App Store time is in RELEASE-CHECKLIST.md.
+- **Full translations**: only the main screens have Spanish so far.
+
+## What was new in 4.2
 
 Built and tested in CI (simulator). Not tried on a real phone, scooter or e-bike yet, so everything that touches hardware *should* work but is unproven. Nothing from 4.1 was removed or capped (6-45 km/h sliders, the 4.0.1 Bluetooth flow, the terminal, Garage, intro and Pro test mode are all as before). Everything below is free; safety, fault warnings and controls never go behind Pro, and there is no paid speed unlock.
 
@@ -35,7 +72,7 @@ Built and tested in CI (simulator). Not tried on a real phone, scooter or e-bike
 - **Widgets**: not shipped. A widget needs an app extension plus an App Group to read ride data, and App Groups need a paid Apple signing team; sideloading tools on a free Apple ID usually drop extensions. Worth doing once there is a signed build.
 - Fardriver road speed (needs wheel size + pole pairs from a capture), any Fardriver/Ninebot writes, Ninebot's encrypted login.
 
-## What's new in 4.1 (beta)
+## What was new in 4.1
 
 - **First-launch intro**: welcome, why Bluetooth, your scooter, find it, the four tabs. Skippable, shown once, More > Show the intro again.
 - **Garage** (More > Garage): every scooter you own with its own name, model, compatibility level, photo or color, notes, last-known stats and trips. Switch the active scooter and the app auto-connects to it. Starts with "My J078" and "Dad's Volpam".
@@ -130,9 +167,9 @@ Features:
 - Walk / eco / drive speed-limit writes and the units / start-mode value meaning: need one capture each to become verified.
 - Volpam lock / light / mode controls: need a capture where the app screen and the frames can be matched one by one (screen recording + sysdiagnose).
 - Battery, odometer, firmware version, fault codes on the J078: no evidence yet.
-- GPS route recording: the data model has room for it (`Trip.route`), but no location code ships in this beta (no location permission is asked).
+- GPS route recording: shipped in 5.0 (opt-in, while the app is open).
 - LCD segment simulator is a generic 7-segment model, not the J078's real segment shapes.
-- Multi-brand: the adapter system is in (`ProtocolAdapters/`), but only the J078 and the Volpam have adapters. The compatibility database seed is built in (Garage), the full searchable checker is next.
+- Multi-brand: the adapter system is in (`ProtocolAdapters/`), but only the J078 and the Volpam have adapters. The compatibility database seed is built in (Garage), and 5.0 adds the searchable checker.
 - Billing is TEST MODE only (see below). No real money can move from this build.
 
 ## Code layout
@@ -156,12 +193,21 @@ J078/
     Entitlements.swift    tiers, products, what Pro unlocks, never-paywalled rules   (4.1)
     ProTools.swift        CSV/GPX export, ride analytics, log analysis, frame diff   (4.1)
     RideFeatures.swift    speed alert, ride timer, maintenance, ride totals, vehicle/controller types (4.2)
+    V5Core.swift          capture tutorial + PIN masking, ride filter, GPS route math, battery/range estimates,
+                          fault explanations, what's new, Stripe test return link, backup/restore      (5.0)
+    AppJournal.swift      crash-safe app log + capture file written as it records                   (5.0)
   ProtocolAdapters/     capability model + adapters (Joyhis365, Zydtech/Volpam, Fardriver + Ninebot read-only (4.2), GenericReadOnly)
   Transport/            BLEManager (CoreBluetooth), Keychain
   Features/             Dashboard, Controls, Connect, Trips, Diagnostics, Customization, Startup, Feedback,
                         Onboarding (4.1), Garage (4.1), Ride (4.2: alert, timer, stats, share card, parked spot,
                         maintenance, quick actions, app settings, packet logger, help, read-only live view)
   Premium/              StoreKit 2 StoreManager, paywall, ProGate, Pro tools, Developer settings (4.1)
+  Features/Capture      capture tutorial, send-a-capture (5.0)
+  Features/V5           compatibility checker, vehicle info, faults, battery/range, backup, what's new,
+                        privacy / terms (DRAFT), credits, app log (5.0)
+  Features/Trips/RouteRecorder.swift  opt-in GPS route + map (5.0)
+  en.lproj, es.lproj    localization (5.0)
+  PrivacyInfo.xcprivacy privacy manifest (5.0)
   Research/             Developer Lab, LCD research
 Tests/                  XCTest (run on a simulator in CI before anything publishes)
 Support/                Info.plist, make_icon.py
@@ -169,7 +215,7 @@ Support/                Info.plist, make_icon.py
 
 ## Tests
 
-`xcodebuild test -scheme J078Tests` on an iPhone simulator (CI does this on every push). Covered: scramble round trip for all 256 byte values + permutation, packet parsing and lengths (every length 0-80 never crashes), status values, gear codes, speed unit conversion, speed-limit writes and acks (incl. the 32→31 clamp), limit outcomes, password replies, the park gate (timeout never parks, late OK doesn't count, expiry, reset), the write gate (simulation / replay never send, experimental needs confirmation, blocked frames and identity characteristics never sent), session timers (no duplicates, cleanup on disconnect, stale ticks ignored), reconnect back-off, adapters (unknown = read-only, name alone isn't enough, Nordic UART isn't a J078, no above-factory writes), trip math (distance, gaps, invalid samples, mode time, detector), theme import validation, and the Volpam CRC against every captured frame.
+`xcodebuild test -scheme J078Tests` on an iPhone simulator (CI does this on every push). Covered: scramble round trip for all 256 byte values + permutation, packet parsing and lengths (every length 0-80 never crashes), status values, gear codes, speed unit conversion, speed-limit writes and acks (incl. the 32→31 clamp), limit outcomes, password replies, the park gate (timeout never parks, late OK doesn't count, expiry, reset), the write gate (simulation / replay never send, experimental needs confirmation, blocked frames and identity characteristics never sent), session timers (no duplicates, cleanup on disconnect, stale ticks ignored), reconnect back-off, adapters (unknown = read-only, name alone isn't enough, Nordic UART isn't a J078, no above-factory writes), trip math (distance, gaps, invalid samples, mode time, detector), theme import validation, and the Volpam CRC against every captured frame. 5.0 adds: the capture tutorial's steps and links, password / PIN masking (text and hex), ride search and filters, GPS route math (distance, glitches, spacing), battery-from-voltage and range estimates, every Fardriver fault has an explanation and unknown ones are never invented, what's-new versioning, the Stripe test return link, backup (blocked keys can't get in or out, round trip, merge-not-replace) and the crash-safe journal (written as it records, survives a relaunch), plus screen tests for every new screen (portrait, landscape, dark and light).
 
 ## Credits and licenses
 
@@ -204,7 +250,7 @@ New repo:
 
 1. Open the repo, tap the **Actions** tab. A build named "Build unsigned IPA" starts on every push to main or v4-dev (or press "Run workflow"). It runs the tests first; nothing publishes unless they pass.
 2. Wait for the green check (about 5 to 10 minutes). If it is red, open it and read the failed step.
-3. Open the finished run, scroll to **Artifacts**, download `J078-unsigned-ipa`. GitHub gives you a .zip; inside is `J078-unsigned.ipa`.
+3. Open the finished run, scroll to **Artifacts**, download `HackTheScoot-unsigned-ipa`. GitHub gives you a .zip; inside is `HackTheScoot-unsigned.ipa`. (Or just download it from the Releases page.)
 
 No Mac needed for this part: GitHub's Mac machines generate the Xcode project (XcodeGen) and build it.
 
