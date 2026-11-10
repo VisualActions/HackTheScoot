@@ -156,25 +156,22 @@ jobs:
           name: HackTheScoot-unsigned-ipa
       - run: cp HackTheScoot-unsigned.ipa HackTheScoot-5.1.0-beta-unsigned.ipa && ls -lh *.ipa
 
-      # One-off repair (5.1): the 5.0 prerelease (v5-beta) was deleted by mistake during the 5.1
-      # work. If it is missing, re-create it from the 5.0 build of commit 4e3c399 (CI run
-      # 42859299928). Does nothing when v5-beta exists. Never touches "latest".
-      - name: Restore the 5.0 beta prerelease if it is missing
+      # One-off repair (5.1): the 5.0 prerelease (v5-beta) lost its .ipa by mistake during the 5.1
+      # work. The release and its tag (on 4e3c399) were re-made by hand; this puts the 5.0 build
+      # of 4e3c399 (CI run 42859299928) back on it if it's missing. Does nothing once it's there.
+      # Never touches "latest".
+      - name: Restore the 5.0 beta .ipa if it is missing
         if: github.ref == 'refs/heads/v4-dev'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v5-beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "v5-beta is there, nothing to do."; exit 0; fi
+          if gh release view v5-beta --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null | grep -q '^HackTheScoot-5.0.0-beta-unsigned.ipa$'; then echo "v5-beta has its .ipa, nothing to do."; exit 0; fi
+          if ! gh release view v5-beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::warning::v5-beta release is missing; not re-creating it from CI."; exit 0; fi
           mkdir -p restore50
           gh run download 42859299928 --repo "$GITHUB_REPOSITORY" -n HackTheScoot-unsigned-ipa -D restore50
           test -f restore50/HackTheScoot-unsigned.ipa
           cp restore50/HackTheScoot-unsigned.ipa restore50/HackTheScoot-5.0.0-beta-unsigned.ipa
-          gh release create v5-beta restore50/HackTheScoot-5.0.0-beta-unsigned.ipa \
-            --target 4e3c39962080480665d16561675668ecabff45a1 \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "HackTheScoot 5.0.0 beta (public release candidate)" \
-            --notes "Unsigned 5.0.0 BETA (build 8) built from 4e3c399 on v4-dev, after the secret scan, the license scan, the unit tests and the screen tests passed. New: a capture tutorial, opt-in GPS route maps, ride search and filters, battery and range estimates, vehicle info, fault explanations, a compatibility checker, backup and restore, what's new, DRAFT privacy policy and terms, crash-safe logs, VoiceOver labels, Spanish started, and the Stripe TEST return link. Not yet tested on a real phone or vehicle. Superseded by v5.1-beta. The stable v3 build stays on the 'latest' release." \
-            --prerelease --latest=false
+          gh release upload v5-beta restore50/HackTheScoot-5.0.0-beta-unsigned.ipa --repo "$GITHUB_REPOSITORY" --clobber || echo "::warning::could not upload the 5.0 .ipa to v5-beta"
 
       # Stable: only main publishes "latest" (v3 stays the stable download until the v5 PR is merged).
       - name: Publish the .ipa to the "latest" GitHub Release
