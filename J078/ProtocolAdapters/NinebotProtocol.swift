@@ -112,9 +112,10 @@ struct NinebotAdapter: ProtocolAdapter {
         .odometer: .unverified,
     ]
     let evidenceNotes = [
-        "Clean-room from the Apache-2.0 NootNooot Segway-Ninebot BLE docs (frames, checksum, registers).",
-        "No capture from a real G30 yet: read-only, writes off.",
-        "Most Ninebots only answer when asked (a write), and new firmware is encrypted, so live data may stay empty until a capture.",
+        "Experimental, untested on hardware. Clean-room from the Apache-2.0 NootNooot Segway-Ninebot BLE spec.",
+        "v5.1: HackTheScoot asks for live data (reads only) and pairs with encrypted Ninebots using its own Encryption2 code (power-button press).",
+        "Max G30: live data plus one experimental setting, cruise control (read first, confirm, write, read back). Lights, KERS, speed mode and max speed stay off: the sources disagree.",
+        "Never sent: firmware, turn off, reboot, lock, PIN, serial, speed limit or power writes.",
     ]
 
     func match(name: String?, serviceIDs: [String]) -> MatchConfidence {

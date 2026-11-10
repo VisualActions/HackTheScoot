@@ -153,7 +153,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: HackTheScoot-unsigned-ipa
-      - run: cp HackTheScoot-unsigned.ipa HackTheScoot-5.0.0-beta-unsigned.ipa && ls -lh *.ipa
+      - run: cp HackTheScoot-unsigned.ipa HackTheScoot-5.1.0-beta-unsigned.ipa && ls -lh *.ipa
 
       # Stable: only main publishes "latest" (v3 stays the stable download until the v5 PR is merged).
       - name: Publish the .ipa to the "latest" GitHub Release
@@ -169,17 +169,17 @@ jobs:
             --notes "Unsigned HackTheScoot IPA built from ${GITHUB_SHA::7}, after the tests passed. Sideload it the way the README says." \
             --latest
 
-      # Beta: v4-dev publishes a separate PRERELEASE (v5-beta), never touching "latest".
-      # (The old v4-beta prerelease is left as it was: 4.2.0.)
-      - name: Publish the v5 beta prerelease
+      # Beta: v4-dev publishes a separate PRERELEASE, never touching "latest".
+      # 5.1: the tag is v5.1-beta. The 5.0 prerelease (v5-beta) and 4.2 (v4-beta) are left as they are.
+      - name: Publish the v5.1 beta prerelease
         if: github.ref == 'refs/heads/v4-dev'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete v5-beta --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          gh release create v5-beta HackTheScoot-5.0.0-beta-unsigned.ipa \
+          gh release delete v5.1-beta --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create v5.1-beta HackTheScoot-5.1.0-beta-unsigned.ipa \
             --target "$GITHUB_SHA" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "HackTheScoot 5.0.0 beta (public release candidate)" \
-            --notes "Unsigned 5.0.0 BETA (build 8) built from ${GITHUB_SHA::7} on v4-dev, after the secret scan, the license scan, the unit tests and the screen tests (every screen, including all the new 5.0 ones) passed. New: a capture tutorial (Help unlock your scooter or e-bike) with I-pressed markers and a GitHub issue template, opt-in GPS route maps, ride search and filters, battery and range estimates, vehicle info / firmware (read-only), fault explanations, a compatibility checker, backup and restore, what's new, DRAFT privacy policy and terms, crash-safe logs, VoiceOver labels, Spanish started, and the Stripe TEST return link. Nothing from 4.2 was removed or capped. Fardriver, Ninebot and unknown vehicles stay read-only. Not yet tested on a real phone or vehicle. See CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
+            --title "HackTheScoot 5.1.0 beta (experimental KuKirin, Xiaomi, Ninebot)" \
+            --notes "Unsigned 5.1.0 BETA (build 9) built from ${GITHUB_SHA::7} on v4-dev, after the secret scan, the license scan, the unit tests and the screen tests (every screen, including the new 5.1 ones) passed. New, all EXPERIMENTAL and UNTESTED ON HARDWARE (they should work, but nobody has tried them on a real scooter yet): KuKirin G2 (2026) and G4 live data (read-only, nothing is ever written to a KuKirin); Xiaomi M365 (plain Bluetooth firmware) live data plus KERS, cruise and tail light, each read first, confirmed and read back; HackTheScoot's own clean-room Ninebot pairing (from the Apache-2.0 NootNooot spec) for the Max G30 and the M365 Pro, Pro 2, 1S and Essential; Max G30 live data plus cruise control; Ninebot and Xiaomi error-code explanations. Never sent: firmware, power off, reboot, lock, PIN, serial, speed-limit or battery commands. No firmware flashing. Nothing from 5.0 was removed or capped; the J078 and Volpam controls are unchanged. See CHANGELOG.md and ACKNOWLEDGEMENTS.md. The stable v3 build stays on the 'latest' release." \
             --prerelease --latest=false

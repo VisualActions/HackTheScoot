@@ -374,9 +374,15 @@ enum FaultCatalog {
 // MARK: - What's new
 
 enum WhatsNew {
-    static let version = "5.0.0"
+    static let version = "5.1.0"
     static let seenKey = "whatsNew.seenVersion"
     static let items: [(icon: String, title: String, detail: String)] = [
+        // 5.1 (experimental, untested on hardware)
+        ("scooter", "KuKirin G2 (2026) and G4", "Experimental, untested on hardware: live data only (G2: speed, battery volts, motor rpm, mode; G4: mode). Nothing is ever written to a KuKirin."),
+        ("bolt.horizontal.circle", "Xiaomi M365 and Ninebot Max G30", "Experimental, untested on hardware: live data, plus a few settings that read first, ask you, and read back (M365: KERS, cruise, tail light; G30: cruise)."),
+        ("key.horizontal", "Ninebot pairing", "Experimental: HackTheScoot's own pairing for encrypted Ninebots and the M365 Pro, Pro 2, 1S and Essential (press the power button). Read-only on those Xiaomis."),
+        ("exclamationmark.octagon", "Ninebot and Xiaomi error codes", "Tap an error number to see what it usually means and what to check."),
+        // 5.0
         ("questionmark.circle", "Help unlock your vehicle", "A step-by-step capture tutorial, two ways, and a GitHub template to send it in."),
         ("map", "GPS route maps", "Opt-in: draws each ride on a map. Stays on your phone."),
         ("magnifyingglass", "Ride history search", "Search and filter by vehicle, date and real or simulated."),

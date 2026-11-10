@@ -147,7 +147,7 @@ final class GarageStore: ObservableObject {
         b.adapterHint = { [weak self] id in
             guard let st = self?.state else { return nil }
             if let s = st.scooters.first(where: { $0.bleID == id }) { return s.controllerType.adapterID }
-            if let a = st.active, a.bleID == nil, a.controllerType == .fardriver || a.controllerType == .ninebot { return a.controllerType.adapterID }
+            if let a = st.active, a.bleID == nil, a.controllerType == .fardriver || a.controllerType == .ninebot || a.controllerType == .kukirin { return a.controllerType.adapterID }
             return nil
         }
         b.onConnected = { [weak self] id, name, kind in

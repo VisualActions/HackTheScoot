@@ -76,6 +76,9 @@ struct CaptureGuideView: View {
                 }
             }
 
+            // v5.1: each brand's real status, so people know what a capture would add.
+            BrandStatusSection()
+
             Section(header: Text("Privacy"), footer: Text(CaptureGuide.privacyNote)) {
                 NavigationLink { CaptureSendView(ble: ble) } label: { Label("Send a capture", systemImage: "paperplane") }
             }

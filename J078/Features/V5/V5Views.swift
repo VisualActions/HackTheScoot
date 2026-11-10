@@ -30,6 +30,8 @@ struct CompatCheckerView: View {
                     Text("Not in the database yet. It would start as read-only, and a capture can change that.").foregroundColor(.secondary)
                 }
             }
+            // v5.1: the real status of each brand, in plain words.
+            if query.isEmpty { BrandStatusSection() }
         }
         .listStyle(.insetGrouped)
         .searchable(text: $query, prompt: "Brand or model")
@@ -138,6 +140,9 @@ struct FaultListView: View {
                     }
                 }
             }
+            Section(header: Text("Ninebot and Xiaomi scooters"), footer: Text("v5.1: error numbers the scooter reports, with what they usually mean. Experimental, untested on hardware.")) {
+                NavigationLink { ScooterErrorCodesView() } label: { Label("Ninebot / Xiaomi error codes", systemImage: "list.number") }
+            }
             Section(header: Text("Joyhis J078 and Volpam"), footer: Text("No fault codes have been decoded from these yet, so none are shown. HackTheScoot never makes one up.")) {
                 Label("Nothing decoded yet", systemImage: "questionmark.circle").foregroundColor(.secondary)
             }
@@ -149,6 +154,8 @@ struct FaultListView: View {
 
 struct FaultDetailView: View {
     let fault: FaultInfo
+    /// v5.1: Ninebot / Xiaomi codes carry their own source line.
+    var sourceText: String = FaultCatalog.source
     static func color(_ s: FaultInfo.Severity) -> Color {
         switch s { case .stop: return .red; case .check: return .orange; case .info: return .secondary }
     }
@@ -160,7 +167,7 @@ struct FaultDetailView: View {
             }
             Section("What it usually means") { Text(fault.meaning) }
             Section("What to do") { Text(fault.whatToDo) }
-            Section(footer: Text(FaultCatalog.source)) { EmptyView() }
+            Section(footer: Text(sourceText)) { EmptyView() }
         }
         .listStyle(.insetGrouped)
         .navigationTitle(fault.title)
@@ -385,7 +392,13 @@ enum LegalText {
     static let licenses: [(String, String)] = [
         ("HackTheScoot", "Our own code. Protocol work decoded from Credence's own Bluetooth captures. No vendor code is included."),
         ("Fardriver notes", "jackhumbert/fardriver-controllers, MIT License, Copyright (c) Jack Humbert. Used for facts (frame layout, address table, CRC parameters, field names). No code copied."),
-        ("Segway-Ninebot BLE protocol docs", "by NootNooot, Apache-2.0 (nootnooot.codeberg.page/segway-ninebot-ble). Used for facts (frame format, checksum, registers). No code copied."),
+        ("Segway-Ninebot BLE protocol docs", "by NootNooot, Apache-2.0 (nootnooot.codeberg.page/segway-ninebot-ble). Used for facts (frame format, checksum, registers). v5.1: HackTheScoot's own clean-room Encryption2 and pairing are written from this spec, under the Apache License 2.0. NOTICE: \"segway-ninebot-ble, Copyright 2026 NootNooot. This is an unofficial, independently developed implementation created through reverse engineering for interoperability purposes. It is not affiliated with, authorized by, endorsed by, or sponsored by Segway Inc., Ninebot, or any related entity.\" Not derived from NinebotCrypto (AGPL)."),
+        ("Ninebot ES protocol document", "Ninebot's own V1.4 document (no licence). Facts only: frame layout, command numbers, checksum, error codes, and which commands are dangerous (blocked)."),
+        ("M365 BLE protocol notes", "CamiAlfa/M365-BLE-PROTOCOL by Camilo Ruiz. Facts only (register numbers and values for the M365). No code linked or copied."),
+        ("scooter-tuning-db", "jx-grxf/scooter-tuning-db, CC BY 4.0. Facts only, as a second source for the M365 settings."),
+        ("ScooterHacking wiki", "wiki.scooterhacking.org, CC BY-SA 4.0. Facts only: error-code meanings and which models use which protocol. Our own wording."),
+        ("KuKirin G2 observations", "joaobenites/bancada-g2 (no licence). Facts only: the G2 (2026) telemetry byte positions. No code copied."),
+        ("KuKirin G4 observations", "maksdoner/Kukirin-G4-Bluetooth-Control, MIT License, Copyright (c) maksdoner. Facts only: the G4 ride-mode byte. Our own code."),
         ("Not used", "No code from scooterhacking repositories (NinebotCrypto is AGPL, most others have no license)."),
         ("Apple", "Apple's public Bluetooth logging profile and sysdiagnose instructions are linked, not copied."),
     ]

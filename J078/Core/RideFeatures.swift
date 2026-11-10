@@ -195,7 +195,7 @@ enum VehicleType: String, Codable, CaseIterable, Identifiable {
 }
 
 enum ControllerType: String, Codable, CaseIterable, Identifiable {
-    case joyhis365, zydtech, ninebot, fardriver, unknown
+    case joyhis365, zydtech, ninebot, fardriver, kukirin, unknown
     var id: String { rawValue }
 
     var label: String {
@@ -204,6 +204,7 @@ enum ControllerType: String, Codable, CaseIterable, Identifiable {
         case .zydtech: return "Zydtech (Volpam, Hiboy)"
         case .ninebot: return "Ninebot / Segway / Xiaomi"
         case .fardriver: return "Fardriver"
+        case .kukirin: return "KuKirin (G2 / G4)"
         case .unknown: return "Unknown"
         }
     }
@@ -215,6 +216,7 @@ enum ControllerType: String, Codable, CaseIterable, Identifiable {
         case .zydtech: return VolpamAdapter.adapterID
         case .ninebot: return NinebotAdapter.adapterID
         case .fardriver: return FardriverAdapter.adapterID
+        case .kukirin: return KukirinAdapter.adapterID
         case .unknown: return GenericReadOnlyAdapter.adapterID
         }
     }
@@ -222,7 +224,7 @@ enum ControllerType: String, Codable, CaseIterable, Identifiable {
     /// Experimental / unknown controllers show live data only until a capture.
     var readOnlyUntilCapture: Bool {
         switch self {
-        case .ninebot, .fardriver, .unknown: return true
+        case .ninebot, .fardriver, .kukirin, .unknown: return true
         case .joyhis365, .zydtech: return false
         }
     }
@@ -231,8 +233,9 @@ enum ControllerType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .joyhis365: return "Controls verified on the J078 from captures."
         case .zydtech: return "Speed limit verified on the Volpam. Other Zydtech models are unverified."
-        case .ninebot: return "Experimental and read-only: live data only. Needs a capture to unlock controls."
+        case .ninebot: return "Experimental, untested on hardware: live data. Plain M365: KERS, cruise and tail light; Max G30: cruise, each confirmed and read back. Everything else stays read-only."
         case .fardriver: return "Experimental and read-only: live data only (volts, amps, motor speed, faults). HackTheScoot never writes to a motor controller. Needs a capture to unlock anything more."
+        case .kukirin: return "Experimental, untested on hardware: live data only (G2: speed, volts, rpm, mode; G4: mode). Nothing is ever written to a KuKirin."
         case .unknown: return "Live data and the packet logger only. Needs a capture to unlock controls."
         }
     }
@@ -242,8 +245,9 @@ enum ControllerType: String, Codable, CaseIterable, Identifiable {
         switch compatAdapter {
         case "joyhis365": return .joyhis365
         case "zydtech365": return .zydtech
-        case "ninebot": return .ninebot
+        case "ninebot", "xiaomi365": return .ninebot
         case "fardriver": return .fardriver
+        case "kukirin": return .kukirin
         default: return .unknown
         }
     }

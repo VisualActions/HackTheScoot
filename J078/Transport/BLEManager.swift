@@ -138,6 +138,8 @@ final class BLEManager: NSObject, ObservableObject {
         case VolpamAdapter.adapterID: return VolpamAdapter()
         case FardriverAdapter.adapterID: return FardriverAdapter()
         case NinebotAdapter.adapterID: return NinebotAdapter()
+        case XiaomiM365Adapter.adapterID: return XiaomiM365Adapter()
+        case KukirinAdapter.adapterID: return KukirinAdapter()
         default: return GenericReadOnlyAdapter()
         }
     }
@@ -156,7 +158,24 @@ final class BLEManager: NSObject, ObservableObject {
     /// used only when detection found nothing. Read-only adapters, so a wrong hint can't write.
     var adapterHint: (UUID) -> String? = { _ in nil }
     /// Read-only adapters: nothing is ever written to these.
-    var isReadOnlyAdapter: Bool { return adapterID == FardriverAdapter.adapterID || adapterID == NinebotAdapter.adapterID }
+    var isReadOnlyAdapter: Bool {
+        return adapterID == FardriverAdapter.adapterID || adapterID == NinebotAdapter.adapterID
+            || adapterID == XiaomiM365Adapter.adapterID || adapterID == KukirinAdapter.adapterID
+    }
+    /// v5.1: KuKirin G2 / G4 live data. Read-only: nothing is ever written to a KuKirin.
+    @Published var kukirin: KukirinTelemetry?
+    /// v5.1: the Xiaomi / Ninebot session (reads, pairing, the few experimental settings).
+    /// EXPERIMENTAL, UNTESTED ON HARDWARE. Every frame still goes through writeGuard.
+    let nbx = NBXDriver()
+    /// Bumped whenever the session changes, so screens refresh.
+    @Published var nbxRevision = 0
+    private var nbxWriteChar: CBCharacteristic?
+    private var nbxNotifyUUID = ""
+    static let ninebotWriteUUID = "6E400002-0000-0000-006E-696E65626F74"
+    static let ninebotNotifyUUID = "6E400004-0000-0000-006E-696E65626F74"
+    static let nordicWriteUUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+    static let nordicNotifyUUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+    var isNBXSession: Bool { return nbx.stage != .off }
 
     // MARK: Private
 
@@ -488,6 +507,10 @@ final class BLEManager: NSObject, ObservableObject {
         ninebot = nil
         fardriverStream = FardriverStream()
         deviceInfo = [:]
+        kukirin = nil
+        nbx.stop()
+        nbxWriteChar = nil
+        nbxNotifyUUID = ""
     }
 
     // MARK: Channels
@@ -537,13 +560,14 @@ final class BLEManager: NSObject, ObservableObject {
         }
         // v4.2: nothing detected, but the Garage says this is a Fardriver / Ninebot vehicle.
         if (kind == .unknown || kind == .nusOther), adapterID == GenericReadOnlyAdapter.adapterID,
-           let hint = adapterHint(p.identifier), hint == FardriverAdapter.adapterID || hint == NinebotAdapter.adapterID {
+           let hint = adapterHint(p.identifier), hint == FardriverAdapter.adapterID || hint == NinebotAdapter.adapterID || hint == KukirinAdapter.adapterID {
             adapterID = hint
             matchConfidence = .nameOnly
         }
         if isReadOnlyAdapter {
             kind = .unknown          // the listen-only path below: subscribe, never write
             if adapterID == NinebotAdapter.adapterID { ninebot = NinebotTelemetry() }
+            if adapterID == KukirinAdapter.adapterID { kukirin = KukirinTelemetry(model: KukirinProto.model(fromName: connectedName)) }
         }
         info("Identified: \(adapter.displayName) (\(adapter.level.rawValue)), match: \(matchConfidence)")
         rememberConnected()
@@ -582,7 +606,81 @@ final class BLEManager: NSObject, ObservableObject {
             }
             setPhase(.ready)
             playStartupOnce()
+            startNBXIfNeeded()
         }
+    }
+
+    // MARK: v5.1 Xiaomi / Ninebot session (EXPERIMENTAL, UNTESTED ON HARDWARE)
+
+    private func startNBXIfNeeded() {
+        guard source == .bluetooth, adapterID == NinebotAdapter.adapterID || adapterID == XiaomiM365Adapter.adapterID,
+              let p = connected else { return }
+        let chars = allCharacteristics()
+        let custom = chars.first { $0.uuid.uuidString.uppercased() == BLEManager.ninebotWriteUUID }
+        let nordic = chars.first { $0.uuid.uuidString.uppercased() == BLEManager.nordicWriteUUID }
+        guard let w = custom ?? nordic else {
+            info("Ninebot / Xiaomi: no write channel found, so listening only.")
+            return
+        }
+        nbxWriteChar = w
+        nbxNotifyUUID = custom != nil ? BLEManager.ninebotNotifyUUID : BLEManager.nordicNotifyUUID
+        let n = connectedName.lowercased()
+        let family: NBXDriver.Family = (adapterID == XiaomiM365Adapter.adapterID || n.hasPrefix("miscooter") || n.hasPrefix("mi scooter")) ? .xiaomi : .ninebot
+        nbx.send = { [weak self] o in self?.sendNBX(o) ?? false }
+        nbx.loadPassword = { key in
+            Keychain.get("nb.session." + key).flatMap { Data(base64Encoded: $0) }.map { [UInt8]($0) }
+        }
+        nbx.savePassword = { pw, key in Keychain.set(Data(pw).base64EncodedString(), for: "nb.session." + key) }
+        nbx.onChange = { [weak self] in self?.nbxRevision &+= 1 }
+        nbx.start(family: family, bleName: connectedName, deviceKey: p.identifier.uuidString, now: Date())
+        timers.start("nbx", every: NBXDriver.pollEvery) { [weak self] in self?.nbx.tick(now: Date()) }
+        info("\(family == .xiaomi ? "Xiaomi" : "Ninebot") session started (experimental, untested on hardware): reads only. Nothing changes on the scooter unless you confirm it.")
+    }
+
+    /// Every Xiaomi / Ninebot frame leaves here, through the same write guard as everything else.
+    private func sendNBX(_ o: NBXDriver.Outgoing) -> Bool {
+        let channel = nbxWriteChar.map { Proto.name(for: $0.uuid) } ?? "--"
+        let decision = writeGuard.decide(o.air, channel: channel, safety: o.safety, origin: o.origin, userConfirmed: o.confirmed)
+        guard decision == .allow, let p = connected, let ch = nbxWriteChar else {
+            if case .deny(let why) = decision, o.logIt || o.origin != .session {
+                addLog(.blocked, channel, raw: o.air, decoded: o.plain, note: "NOT sent (\(why)): \(o.note)")
+            }
+            return false
+        }
+        let type = writeType(for: ch)
+        let size = max(20, p.maximumWriteValueLength(for: type))
+        var chunks: [[UInt8]] = []
+        var i = 0
+        while i < o.air.count {
+            chunks.append(Array(o.air[i..<min(i + size, o.air.count)]))
+            i += size
+        }
+        let sid = timers.sessionID
+        for (k, c) in chunks.enumerated() {
+            if k == 0 {
+                p.writeValue(Data(c), for: ch, type: type)
+            } else {
+                // NootNooot transport notes: split at MTU - 3, about 10 ms apart.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.012 * Double(k)) { [weak self] in
+                    guard let self = self, self.timers.sessionID == sid, self.connected === p else { return }
+                    p.writeValue(Data(c), for: ch, type: type)
+                }
+            }
+        }
+        if o.logIt { addLog(.tx, channel, raw: o.air, decoded: o.plain, note: o.note) }
+        return true
+    }
+
+    /// Rider tapped Pair (and confirmed). The scooter asks for a power-button press.
+    func nbxStartPairing() {
+        guard !isSimulating else { return }
+        nbx.startPairing(now: Date())
+    }
+
+    /// One experimental setting. nil = sent (then read back); otherwise why not.
+    func nbxWrite(_ s: NBXSetting, value: UInt16) -> String? {
+        guard !isSimulating else { return "Simulation never sends anything." }
+        return nbx.write(s, value: value, confirmed: true, now: Date())
     }
 
     /// Commands that need a reply wait for the subscription to be CONFIRMED.
@@ -1160,6 +1258,7 @@ extension BLEManager: CBCentralManagerDelegate {
         // Timers stop the moment the link goes: no writes into a dead connection.
         let wasLive = phase == .ready || phase == .synchronizing
         timers.newSession()
+        nbx.stop()
         j078Ready = false
         volpamAuthOK = false
         volpamHeartbeatOn = false
@@ -1268,16 +1367,28 @@ extension BLEManager: CBPeripheralDelegate {
             handleVolpam(bytes, from: n)
         } else {
             noteRx()
+            if isNBXSession, characteristic.uuid.uuidString.uppercased() == nbxNotifyUUID { nbx.receive(bytes, now: Date()) }
             var hints = Proto.rawHints(bytes)
-            if let note = readOnlyDecode(bytes) { hints = note }
+            if let note = readOnlyDecode(bytes, channel: n) { hints = note }
             addLog(.rx, n, raw: bytes, note: hints)
         }
     }
 
     /// v4.2: Fardriver / Ninebot frames, decoded read-only. Also spots a Fardriver by its
     /// frame shape (AA + valid CRC), the way a J078 is spotted by its status frame.
-    private func readOnlyDecode(_ bytes: [UInt8]) -> String? {
+    private func readOnlyDecode(_ bytes: [UInt8], channel: String = "") -> String? {
         guard kind == .unknown || kind == .nusOther else { return nil }
+        if adapterID == KukirinAdapter.adapterID {
+            // v5.1: only the FFF2 telemetry characteristic.
+            guard ServiceID.short(channel) == KukirinProto.notifyChar else { return nil }
+            var t = kukirin ?? KukirinTelemetry(model: KukirinProto.model(fromName: connectedName))
+            t.feed(bytes)
+            kukirin = t
+            return "KuKirin: \(t.validFrames) frame(s) decoded (read-only)"
+        }
+        if adapterID == XiaomiM365Adapter.adapterID {
+            return isNBXSession ? "Xiaomi: \(nbx.stageText)" : nil
+        }
         if adapterID == NinebotAdapter.adapterID {
             var t = ninebot ?? NinebotTelemetry()
             t.feed(bytes)

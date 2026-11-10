@@ -209,6 +209,6 @@ final class RideFeatureTests: XCTestCase {
         XCTAssertNil(o?.controller)
         XCTAssertEqual(o?.controllerType, .zydtech)
         XCTAssertEqual(CompatSeed.find("fardriver-nd").level, .experimental)
-        XCTAssertTrue(ControllerType.allCases.filter { $0.readOnlyUntilCapture } == [.ninebot, .fardriver, .unknown])
+        XCTAssertTrue(ControllerType.allCases.filter { $0.readOnlyUntilCapture } == [.ninebot, .fardriver, .kukirin, .unknown])
     }
 }

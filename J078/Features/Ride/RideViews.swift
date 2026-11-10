@@ -673,6 +673,13 @@ struct ReadOnlyLiveView: View {
             if let f = ble.fardriver {
                 FardriverLiveSection(t: f)
             }
+            // v5.1 (experimental, untested on hardware)
+            if let k = ble.kukirin {
+                KukirinLiveSection(t: k)
+            }
+            if ble.isNBXSession {
+                NBXLiveSection(ble: ble)
+            }
             if let n = ble.ninebot {
                 Section(header: Text("Ninebot live data (unverified)"),
                         footer: Text("Only plain (unencrypted) replies can be read. New Ninebot firmware is encrypted, and most Ninebots only answer when asked, which needs a write, so this may stay empty until a capture.")) {

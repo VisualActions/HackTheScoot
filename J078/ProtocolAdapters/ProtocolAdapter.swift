@@ -142,7 +142,8 @@ enum ServiceID {
 // MARK: - Registry
 
 enum AdapterRegistry {
-    static let all: [ProtocolAdapter] = [Joyhis365Adapter(), VolpamAdapter(), FardriverAdapter(), NinebotAdapter()]
+    static let all: [ProtocolAdapter] = [Joyhis365Adapter(), VolpamAdapter(), FardriverAdapter(), NinebotAdapter(),
+                                         XiaomiM365Adapter(), KukirinAdapter()]   // v5.1: Xiaomi + KuKirin (experimental)
     static let generic: ProtocolAdapter = GenericReadOnlyAdapter()
 
     /// Best adapter for what we can see. Anything without a real match is GenericReadOnly.
