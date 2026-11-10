@@ -26,7 +26,7 @@ PLANS = [
 
 
 def fail(msg):
-    print(f"::error title=Stripe test setup::{msg}")
+    print(f"::error title=Stripe test setup::{msg[:900]}")
     sys.exit(1)
 
 
@@ -50,7 +50,7 @@ def call(method, path, params=None, idem=None):
     except urllib.error.HTTPError as e:
         try:
             err = json.loads(e.read().decode()).get("error", {})
-            fail(f"Stripe said {e.code}: {err.get('type')} {err.get('code') or ''} {err.get('message', '')[:200]}")
+            fail(f"Stripe said {e.code} on {method} {path}: {err.get('type')} {err.get('code') or ''} param={err.get('param')} {err.get('message', '')[:500]}")
         except Exception:
             fail(f"Stripe said HTTP {e.code}")
     check_test(obj)
@@ -100,7 +100,7 @@ def main():
         }, idem=idem("product", "pro", TAX_CODE, "v3"))
     if not product.get("tax_code"):
         product = call("POST", f"/products/{product['id']}", {"tax_code": TAX_CODE})
-    print(f"product {product['id']} (test mode, tax code {product.get('tax_code')})")
+    print(f"::notice title=Stripe test product::{product['id']} tax_code={product.get('tax_code')} prices_on={sorted(set(p['product'] for p in prices.values()))}")
 
     # tidy: archive any duplicate Pro product an earlier run left without prices
     dupes = call("GET", "/products/search", {"query": "metadata['hts_key']:'pro' AND active:'true'"})
