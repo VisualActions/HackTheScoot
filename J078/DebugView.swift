@@ -8,35 +8,9 @@ struct ShareItem: Identifiable {
 
 struct DebugView: View {
     @ObservedObject var ble: BLEManager
-    @State private var page = 0
-    @AppStorage("devMode") private var devMode = false
-
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("", selection: $page) {
-                    Text("Packet log").tag(0)
-                    Text("Status bytes").tag(1)
-                    if devMode {
-                        Text("Terminal").tag(2)
-                        Text("Explore").tag(3)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 6)
-                if page == 0 {
-                    LogPage(ble: ble)
-                } else if page == 2 && devMode {
-                    TerminalView(ble: ble)
-                } else if page == 3 && devMode {
-                    ExperimentalView(ble: ble)
-                } else {
-                    StatusBytesPage(ble: ble)
-                }
-            }
-            .navigationTitle("Debug")
-            .navigationBarTitleDisplayMode(.inline)
+            DevLabView(ble: ble)
         }
     }
 }
@@ -100,6 +74,7 @@ struct LogRow: View {
         case .rx: return .green
         case .tx: return .orange
         case .info: return .secondary
+        case .blocked: return .red
         }
     }
 

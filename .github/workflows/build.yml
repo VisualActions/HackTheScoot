@@ -2,11 +2,60 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, v4-dev ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Unit tests (simulator)
+    runs-on: macos-latest
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        run: xcodegen generate
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          c=[(k,x) for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          c.sort(key=lambda p: p[0])
+          print(c[-1][1]["udid"])')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Simulator: $UDID"
+      - name: Run tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project J078.xcodeproj \
+            -scheme J078Tests \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build-tests \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log | grep -E "Test Case|error:|Executed|TEST (SUCCEEDED|FAILED)" || true
+          grep -q "TEST SUCCEEDED" test.log
+      - name: Test report
+        if: always()
+        run: |
+          echo "## Test report" >> "$GITHUB_STEP_SUMMARY"
+          grep -E "Executed [0-9]+ tests" test.log | tail -1 >> "$GITHUB_STEP_SUMMARY" || true
+          grep -E "error:|failed" test.log | head -50 >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: test.log
+
   build:
+    name: Build IPA
+    needs: test
     runs-on: macos-latest
     permissions:
       contents: write
@@ -39,7 +88,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Show build errors
+        if: failure()
+        run: grep -E "error:" build.log | head -80 || true
 
       - name: Package Payload/ into an .ipa
         run: |
@@ -49,7 +103,8 @@ jobs:
           mkdir Payload
           cp -R "$APP" Payload/
           zip -qry J078-unsigned.ipa Payload
-          ls -lh J078-unsigned.ipa
+          cp J078-unsigned.ipa HackTheScoot-v4-beta-unsigned.ipa
+          ls -lh *.ipa
 
       - name: Upload the .ipa
         uses: actions/upload-artifact@v4
@@ -58,8 +113,9 @@ jobs:
           path: J078-unsigned.ipa
           if-no-files-found: error
 
+      # Stable: only main publishes "latest" (v3 stays the stable download until v4 is merged).
       - name: Publish the .ipa to the "latest" GitHub Release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -67,5 +123,18 @@ jobs:
           gh release create latest J078-unsigned.ipa \
             --target "$GITHUB_SHA" \
             --title "Latest build" \
-            --notes "Unsigned HackTheScoot v3 IPA built from ${GITHUB_SHA::7}. Sideload it the same way as the README says." \
+            --notes "Unsigned HackTheScoot IPA built from ${GITHUB_SHA::7}. Sideload it the same way as the README says." \
             --latest
+
+      # Beta: v4-dev publishes a separate PRERELEASE, never touching "latest".
+      - name: Publish the v4 beta prerelease
+        if: github.ref == 'refs/heads/v4-dev' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete v4-beta --yes --cleanup-tag || true
+          gh release create v4-beta HackTheScoot-v4-beta-unsigned.ipa \
+            --target "$GITHUB_SHA" \
+            --title "HackTheScoot v4 beta" \
+            --notes "Unsigned v4 BETA built from ${GITHUB_SHA::7} on v4-dev, after the unit tests passed. Experimental: see CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
+            --prerelease --latest=false
