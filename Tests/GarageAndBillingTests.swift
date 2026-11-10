@@ -15,7 +15,7 @@ final class GarageTests: XCTestCase {
     }
 
     func testCompatSeedMatchesTheResearchDatabase() {
-        XCTAssertEqual(CompatSeed.entries.count, 7)
+        XCTAssertEqual(CompatSeed.entries.count, 8)   // 4.2 added the Fardriver ND entry
         XCTAssertEqual(CompatSeed.find("hiboy-s2-pro").level, .experimental)
         XCTAssertEqual(CompatSeed.find("dualtron-ey4").level, .unsupported)
         XCTAssertEqual(CompatSeed.find("nope").id, "other")

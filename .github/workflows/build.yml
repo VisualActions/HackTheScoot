@@ -163,6 +163,6 @@ jobs:
           gh release create v4-beta HackTheScoot-v4-beta-unsigned.ipa \
             --target "$GITHUB_SHA" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "HackTheScoot 4.1.0 beta" \
-            --notes "Unsigned 4.1.0 BETA (build 6) built from ${GITHUB_SHA::7} on v4-dev, after the unit tests and the screen tests (every screen, including the new onboarding, Garage, Pro paywall and Pro tools) passed. New: first-launch intro, Garage (multiple scooters, auto-connect to the active one), HackTheScoot Pro in TEST MODE (StoreKit 2 paywall + a labelled test unlock in More > Developer settings). Nothing from 4.0.1 was removed or capped. Not yet tested on a real phone or scooter. See CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
+            --title "HackTheScoot 4.2.0 beta" \
+            --notes "Unsigned 4.2.0 BETA (build 7) built from ${GITHUB_SHA::7} on v4-dev, after the unit tests and the screen tests (every screen, including all the new 4.2 ones) passed. New: speed alert, ride timer with laps, ride stats, share card image, maintenance reminders, last-parked spot (opt-in), long-press quick actions, units/accent/haptics/app icon settings, packet logger with export, help/FAQ, e-bikes in the Garage, and EXPERIMENTAL READ-ONLY Fardriver and Ninebot adapters (live data only until a capture, nothing is ever written to them). Nothing from 4.1 was removed or capped. Not yet tested on a real phone or vehicle. See CHANGELOG.md. The stable v3 build stays on the 'latest' release." \
             --prerelease --latest=false

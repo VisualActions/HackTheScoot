@@ -13,7 +13,7 @@ struct ScooterAvatar: View {
                 Image(uiImage: img).resizable().scaledToFill()
             } else {
                 Color(hex: scooter.colorHex).opacity(0.85)
-                Image(systemName: "scooter").font(.system(size: size * 0.45, weight: .semibold)).foregroundColor(.white)
+                Image(systemName: scooter.vehicleType.icon).font(.system(size: size * 0.45, weight: .semibold)).foregroundColor(.white)
             }
         }
         .frame(width: size, height: size)
@@ -64,7 +64,7 @@ struct GarageView: View {
                         }
                 }
             }
-            Section { Button { adding = true } label: { Label("Add a scooter", systemImage: "plus") } }
+            Section { Button { adding = true } label: { Label("Add a scooter or e-bike", systemImage: "plus") } }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Garage")
@@ -98,6 +98,16 @@ struct GarageRow: View {
     }
 }
 
+/// v4.2 controller-type picker shared by add + edit.
+struct ControllerPicker: View {
+    @Binding var controller: ControllerType
+    var body: some View {
+        Picker("Controller", selection: $controller) {
+            ForEach(ControllerType.allCases) { c in Text(c.label).tag(c) }
+        }
+    }
+}
+
 /// Model picker shared by add + edit.
 struct CompatPicker: View {
     @Binding var compatID: String
@@ -114,23 +124,39 @@ struct AddScooterView: View {
     @State private var name = ""
     @State private var compatID = "joyhis-j078"
     @State private var color = Color(hex: "#30D158")
+    @State private var vehicle: VehicleType = .escooter
+    @State private var controller: ControllerType = .joyhis365
 
     var body: some View {
         NavigationView {
             Form {
                 Section("Name") { TextField("e.g. My J078", text: $name) }
+                Section("Type") {
+                    Picker("Vehicle", selection: $vehicle) {
+                        ForEach(VehicleType.allCases) { v in Label(v.label, systemImage: v.icon).tag(v) }
+                    }
+                    .pickerStyle(.segmented)
+                }
                 Section(footer: Text(CompatSeed.find(compatID).note)) {
                     CompatPicker(compatID: $compatID)
                     HStack { Text("Compatibility"); Spacer(); CompatBadge(level: CompatSeed.find(compatID).level) }
                 }
+                .onChange(of: compatID) { id in controller = ControllerType.from(compatAdapter: CompatSeed.find(id).adapter) }
+                Section(footer: Text(controller.note)) {
+                    ControllerPicker(controller: $controller)
+                    if controller.readOnlyUntilCapture {
+                        Label("Live data only: needs a capture to unlock controls", systemImage: "lock.shield").font(.footnote).foregroundColor(.orange)
+                    }
+                }
                 Section("Look") { ColorPicker("Color", selection: $color, supportsOpacity: false) }
             }
-            .navigationTitle("Add scooter")
+            .navigationTitle("Add vehicle")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: done) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        garage.add(name: name.isEmpty ? CompatSeed.find(compatID).model : name, compatID: compatID, colorHex: color.hexString)
+                        garage.add(name: name.isEmpty ? CompatSeed.find(compatID).model : name, compatID: compatID, colorHex: color.hexString,
+                                   vehicleType: vehicle, controller: controller)
                         done()
                     }
                 }
@@ -183,7 +209,12 @@ struct GarageDetailView: View {
             }
             Section("Details") {
                 TextField("Name", text: binding(\.name, ""))
+                Picker("Vehicle", selection: binding(\.vehicleType, .escooter)) {
+                    ForEach(VehicleType.allCases) { v in Text(v.label).tag(v) }
+                }
                 CompatPicker(compatID: binding(\.compatID, "other"))
+                ControllerPicker(controller: Binding(get: { scooter?.controllerType ?? .unknown },
+                                                     set: { c in if var x = scooter { x.controller = c; garage.update(x) } }))
                 ColorPicker("Color", selection: Binding(get: { Color(hex: s.colorHex) }, set: { c in if var x = scooter { x.colorHex = c.hexString; garage.update(x) } }), supportsOpacity: false)
                 PhotosPicker(selection: $photoItem, matching: .images) { Label(s.photoFile == nil ? "Add a photo" : "Change photo", systemImage: "photo") }
                 if s.photoFile != nil { Button("Remove photo", role: .destructive) { garage.setPhoto(nil, for: s.id) } }
@@ -191,6 +222,18 @@ struct GarageDetailView: View {
             Section(header: Text("Compatibility"), footer: Text(s.compat.note)) {
                 HStack { Text("Adapter"); Spacer(); Text(s.compat.adapter ?? "none").foregroundColor(.secondary) }
                 HStack { Text("Level"); Spacer(); Text(s.compat.level.rawValue).foregroundColor(.secondary) }
+            }
+            if s.readOnlyUntilCapture {
+                Section(header: Text("Read-only"), footer: Text(s.controllerType.note)) {
+                    Label("Live data only. Needs a capture to unlock controls.", systemImage: "lock.shield").foregroundColor(.orange)
+                    NavigationLink { PacketLoggerView(ble: ble) } label: { Label("Start the packet logger", systemImage: "record.circle") }
+                        .simultaneousGesture(TapGesture().onEnded { if !PacketRecorder.shared.isRecording { PacketRecorder.shared.start(ble: ble) } })
+                }
+            }
+            Section("Care") {
+                NavigationLink { MaintenanceView(scooterID: s.id, trips: TripManager.sharedForMore) } label: {
+                    Label("Maintenance reminders", systemImage: "wrench.and.screwdriver")
+                }
             }
             Section("Notes") {
                 TextEditor(text: binding(\.notes, "")).frame(minHeight: 80)

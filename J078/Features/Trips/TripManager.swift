@@ -40,6 +40,7 @@ final class TripManager: ObservableObject {
     }
 
     func sample(kmh: Double, mode: String?, simulated: Bool, at now: Date = Date()) {
+        RideHub.shared.sample(kmh: kmh, at: now)   // v4.2 speed alert
         if var c = current {
             c.samples.append(TripSample(t: now.timeIntervalSince(c.start), kmh: kmh, mode: mode))
             current = c

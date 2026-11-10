@@ -48,6 +48,8 @@ struct RootView: View {
     @State private var choosing = (UserDefaults.standard.string(forKey: "chosenModel") ?? "").isEmpty
     @State private var showStartup = StartupSettings.enabled
     @State private var showOnboarding = !Onboarding.done
+    @State private var wasLinked = false
+    @State private var lastName = ""
 
     var body: some View {
         ZStack {
@@ -97,6 +99,12 @@ struct RootView: View {
         .onChange(of: ble.phase) { p in
             // close the connect sheet once the scooter is up
             if p == .ready, showConnect, !ble.isSimulating { showConnect = false }
+            // v4.2 "last parked here": the link dropped (scooter turned off / walked away)
+            if !p.isLinked, wasLinked, !ble.isSimulating { ParkedSpotStore.shared.noteParked(scooterName: lastName) }
+            if p.isLinked { wasLinked = true; lastName = ble.connectedName } else { wasLinked = false }
+        }
+        .onChange(of: ble.status?.parked) { parked in
+            if parked == true, !ble.isSimulating { ParkedSpotStore.shared.noteParked(scooterName: ble.connectedName) }
         }
     }
 }

@@ -17,7 +17,8 @@ final class Feedback {
         var soundKey: String { "fb.sound." + rawValue }
     }
 
-    func hapticOn(_ e: Event) -> Bool { UserDefaults.standard.object(forKey: e.hapticKey) as? Bool ?? true }
+    /// v4.2: More > App settings > Haptics turns every vibration off at once.
+    func hapticOn(_ e: Event) -> Bool { HapticsPref.on && (UserDefaults.standard.object(forKey: e.hapticKey) as? Bool ?? true) }
     func soundOn(_ e: Event) -> Bool { UserDefaults.standard.object(forKey: e.soundKey) as? Bool ?? false }
 
     func fire(_ e: Event) {
@@ -45,6 +46,7 @@ final class Feedback {
     func sequence(_ pattern: [Double]) {
         for (i, delay) in pattern.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard HapticsPref.on else { return }
                 UIImpactFeedbackGenerator(style: i == pattern.count - 1 ? .heavy : .light).impactOccurred()
             }
         }

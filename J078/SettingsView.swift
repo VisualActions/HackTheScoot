@@ -15,6 +15,7 @@ struct MoreView: View {
     @AppStorage(Keys.gaugeMax) private var gaugeMax = 30.0
     @ObservedObject var garage = GarageStore.shared
     @ObservedObject var store = StoreManager.shared
+    @ObservedObject var rideHub = RideHub.shared
 
     var body: some View {
         NavigationView {
@@ -41,6 +42,18 @@ struct MoreView: View {
                     Toggle(isOn: $ble.autoReconnect) { Label("Auto-connect", systemImage: "arrow.triangle.2.circlepath") }
                     Button(action: chooseScooter) { Label("Choose scooter model", systemImage: "scooter") }
                 }
+                Section("Ride") {
+                    NavigationLink { SpeedAlertSettingsView() } label: {
+                        HStack {
+                            Label("Speed alert", systemImage: "bell.badge")
+                            Spacer()
+                            Text(rideHub.alertOn ? UnitPref.speed(rideHub.alertKmh, mph: UnitPref.mph(themes)) : "Off").foregroundColor(.secondary)
+                        }
+                    }
+                    NavigationLink { RideTimerView() } label: { Label("Ride timer and laps", systemImage: "stopwatch") }
+                    NavigationLink { RideStatsView(trips: TripManager.sharedForMore) } label: { Label("Ride stats", systemImage: "chart.line.uptrend.xyaxis") }
+                    NavigationLink { ParkedSpotView(ble: ble) } label: { Label("Last parked here", systemImage: "mappin.and.ellipse") }
+                }
                 Section("Dashboard") {
                     NavigationLink { ThemeEditorView() } label: { Label("Theme and colors", systemImage: "paintpalette") }
                     NavigationLink { DashboardDesignerView() } label: { Label("Dashboard designer", systemImage: "square.grid.2x2") }
@@ -64,6 +77,8 @@ struct MoreView: View {
                     NavigationLink { FrameDiffView() } label: { proLabel("Frame compare", "rectangle.split.2x1", .protocolWorkspace) }
                 }
                 Section("App") {
+                    NavigationLink { AppSettingsView() } label: { Label("App settings (units, accent, haptics, icon)", systemImage: "gearshape") }
+                    NavigationLink { HelpView() } label: { Label("Help and FAQ", systemImage: "questionmark.circle") }
                     Button { NotificationCenter.default.post(name: .hackTheScootShowOnboarding, object: nil) } label: { Label("Show the intro again", systemImage: "hand.wave") }
                     NavigationLink { StartupStudioView() } label: { Label("Startup Studio", systemImage: "sparkles") }
                     NavigationLink { FeedbackSettingsView() } label: { Label("Haptics and sounds", systemImage: "waveform") }
@@ -77,6 +92,7 @@ struct MoreView: View {
                     NavigationLink { DiagnosticsView(ble: ble) } label: { Label("Diagnostics", systemImage: "stethoscope") }
                     NavigationLink { DevLabView(ble: ble) } label: { Label("Developer Lab", systemImage: "terminal") }
                     NavigationLink { LogPage(ble: ble) } label: { Label("Packet log", systemImage: "list.bullet.rectangle") }
+                    NavigationLink { PacketLoggerView(ble: ble) } label: { Label("Packet logger (record a capture)", systemImage: "record.circle") }
                     NavigationLink { DeveloperSettingsView() } label: { Label("Developer settings (test unlock)", systemImage: "hammer") }
                 }
                 Section(header: Text("About"), footer: Text("Trips, logs and settings stay on this phone unless you export them. Nothing is uploaded.")) {

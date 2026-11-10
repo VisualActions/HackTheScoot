@@ -1,4 +1,4 @@
-# HackTheScoot (v4.1 beta)
+# HackTheScoot (v4.2 beta)
 
 An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Volpam**). Everything it does on the J078 was decoded from real Bluetooth captures of the 365 app on Nov 9 2026. Nothing is guessed silently: every feature below says how sure we are.
 
@@ -7,6 +7,33 @@ An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Vol
 Downloads:
 - Stable v3: https://github.com/VisualActions/HackTheScoot/releases/latest/download/J078-unsigned.ipa
 - v4 beta: https://github.com/VisualActions/HackTheScoot/releases/download/v4-beta/HackTheScoot-v4-beta-unsigned.ipa
+
+## What's new in 4.2 (beta)
+
+Built and tested in CI (simulator). Not tried on a real phone, scooter or e-bike yet, so everything that touches hardware *should* work but is unproven. Nothing from 4.1 was removed or capped (6-45 km/h sliders, the 4.0.1 Bluetooth flow, the terminal, Garage, intro and Pro test mode are all as before). Everything below is free; safety, fault warnings and controls never go behind Pro, and there is no paid speed unlock.
+
+- **Ride stats** (More > Ride, Trips): this ride and all rides: average and top speed, ride and moving time, distance. Distance is labelled **estimated**: it is speed × time between samples, not the odometer.
+- **Speed alert**: you pick a speed; the phone buzzes and beeps once when you go over it and re-arms after you slow down. It never changes the scooter.
+- **Ride timer with laps**: start / pause / lap / reset, best lap marked.
+- **Units everywhere**: More > App settings > Units (scooter's own / mph / km/h) changes the dashboard, trips, stats, alerts and share cards.
+- **Last parked here** (opt-in, location only while the app is in use): when the scooter parks or the link drops while the app is open, the phone saves where you are. Map + directions. Stays on the phone.
+- **Share card**: a ride summary image (Trips > a ride > Share card image).
+- **Maintenance reminders** (Garage > a vehicle > Maintenance): tire pressure, brakes, bolts, or your own, every N miles or N days, whichever comes first.
+- **Quick actions**: long-press the speed on the Dashboard (or tap the bolt) for light, park and mode.
+- **App settings**: accent colour, a master haptics switch, alternate app icons (Classic, Ember, Mono, Lime).
+- **Packet logger** (More > Tools, Controls, Garage): records every Bluetooth frame in and out (passwords masked) and exports a .txt capture.
+- **Help / FAQ** in More.
+- **Garage: e-bikes and controller types**: "Add vehicle" picks e-scooter or e-bike and the controller (Joyhis/365, Zydtech, Ninebot, Fardriver, Unknown).
+
+### New brands: read-only until a capture
+- **Fardriver (ND-series e-bike / e-scooter controllers)**: `FardriverAdapter`, **Experimental, read-only, no writes at all** (motor-controller writes can damage hardware). Detected by name, by the Garage's controller type, or by its frame shape (AA + valid CRC, 3 frames). Shows battery volts, current, power (worked out as V × A), state of charge, raw motor speed (likely RPM; no road speed without wheel size), gear, motor temperature, brake and fault bits. All unverified until a capture. If the controller only streams after the official app wakes it, the screen stays empty: that also needs a capture.
+- **Ninebot / Segway (Max G30 first)**: `NinebotAdapter`, **Experimental, read-only, writes off**. Decodes plain Protocol 2 read replies (speed, battery, odometer, range) if any arrive. Most Ninebots only answer when asked (a write) and current firmware is encrypted, so live data will usually stay empty until a real capture.
+- Experimental and Unknown vehicles show live data only, with a "needs a capture to unlock controls" note and a button that starts the packet logger.
+- The scooterhacking GitHub org has no Fardriver code (it covers Ninebot/Xiaomi), and its code isn't reused: NinebotCrypto is AGPL and most other repos there have no license. Both adapters are clean-room from the public docs credited below.
+
+### Deferred (honest list)
+- **Widgets**: not shipped. A widget needs an app extension plus an App Group to read ride data, and App Groups need a paid Apple signing team; sideloading tools on a free Apple ID usually drop extensions. Worth doing once there is a signed build.
+- Fardriver road speed (needs wheel size + pole pairs from a capture), any Fardriver/Ninebot writes, Ninebot's encrypted login.
 
 ## What's new in 4.1 (beta)
 
@@ -128,10 +155,12 @@ J078/
     CompatSeed.swift      research compatibility database seed                       (4.1)
     Entitlements.swift    tiers, products, what Pro unlocks, never-paywalled rules   (4.1)
     ProTools.swift        CSV/GPX export, ride analytics, log analysis, frame diff   (4.1)
-  ProtocolAdapters/     capability model + adapters (Joyhis365, Zydtech/Volpam, GenericReadOnly)
+    RideFeatures.swift    speed alert, ride timer, maintenance, ride totals, vehicle/controller types (4.2)
+  ProtocolAdapters/     capability model + adapters (Joyhis365, Zydtech/Volpam, Fardriver + Ninebot read-only (4.2), GenericReadOnly)
   Transport/            BLEManager (CoreBluetooth), Keychain
   Features/             Dashboard, Controls, Connect, Trips, Diagnostics, Customization, Startup, Feedback,
-                        Onboarding (4.1), Garage (4.1)
+                        Onboarding (4.1), Garage (4.1), Ride (4.2: alert, timer, stats, share card, parked spot,
+                        maintenance, quick actions, app settings, packet logger, help, read-only live view)
   Premium/              StoreKit 2 StoreManager, paywall, ProGate, Pro tools, Developer settings (4.1)
   Research/             Developer Lab, LCD research
 Tests/                  XCTest (run on a simulator in CI before anything publishes)
@@ -146,7 +175,9 @@ Support/                Info.plist, make_icon.py
 
 - Protocol work: decoded by us from Credence's own captures. No vendor code is included.
 - Ideas (not code) from open-source scooter apps: speed / trip / mode-tile dashboards and log-export ideas common to projects like the ScooterHacking community tools (scooterhacking.org) and open M365 dashboard apps. No source from any of them is copied into this repo. If code is ever reused, its license and copyright notice will be added here first; AGPL/GPL code won't be reused in an App Store build.
-- App icon and logo: drawn in code in this repo.
+- **Fardriver adapter (4.2)**: written clean-room from the public notes in [jackhumbert/fardriver-controllers](https://github.com/jackhumbert/fardriver-controllers) (MIT License, Copyright (c) Jack Humbert): the serial frame layout, the id-to-address table, the CRC parameters and the field names. No code is copied; the CRC is computed bitwise and checked in tests against frames built with that project's own tables. Facts only (no code) from public forum threads that the Bluetooth module notifies on FFE1.
+- **Ninebot adapter (4.2)**: written clean-room from the [Segway-Ninebot BLE Protocol docs](https://nootnooot.codeberg.page/segway-ninebot-ble/) by NootNooot (Apache-2.0): frame format, checksum, register numbers. No code from scooterhacking's repos (NinebotCrypto is AGPL; most others have no license).
+- App icon and logo: drawn in code in this repo (4.2's alternate icons are recolours of it).
 
 ## 1. Put it on GitHub
 

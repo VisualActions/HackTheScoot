@@ -136,6 +136,8 @@ final class BLEManager: NSObject, ObservableObject {
         switch adapterID {
         case Joyhis365Adapter.adapterID: return Joyhis365Adapter()
         case VolpamAdapter.adapterID: return VolpamAdapter()
+        case FardriverAdapter.adapterID: return FardriverAdapter()
+        case NinebotAdapter.adapterID: return NinebotAdapter()
         default: return GenericReadOnlyAdapter()
         }
     }
@@ -143,6 +145,16 @@ final class BLEManager: NSObject, ObservableObject {
     /// Called on every valid live sample (km/h, mode, simulated?). TripManager listens.
     var onSpeedSample: ((Double, String?, Bool) -> Void)?
     var onLinkLost: (() -> Void)?
+
+    /// v4.2 read-only adapters: live values decoded from what the vehicle sends on its own.
+    @Published var fardriver: FardriverTelemetry?
+    @Published var ninebot: NinebotTelemetry?
+    private var fardriverStream = FardriverStream()
+    /// v4.2: the controller type the Garage has for a Bluetooth id (Fardriver / Ninebot),
+    /// used only when detection found nothing. Read-only adapters, so a wrong hint can't write.
+    var adapterHint: (UUID) -> String? = { _ in nil }
+    /// Read-only adapters: nothing is ever written to these.
+    var isReadOnlyAdapter: Bool { return adapterID == FardriverAdapter.adapterID || adapterID == NinebotAdapter.adapterID }
 
     // MARK: Private
 
@@ -206,8 +218,10 @@ final class BLEManager: NSObject, ObservableObject {
     // MARK: Log
 
     func addLog(_ kind: LogEntry.Kind, _ channel: String, raw: [UInt8] = [], decoded: [UInt8]? = nil, note: String = "") {
-        log.append(LogEntry(time: Date(), kind: kind, channel: channel, raw: raw, decoded: decoded, note: note,
-                            simulated: source.isSimulated))
+        let entry = LogEntry(time: Date(), kind: kind, channel: channel, raw: raw, decoded: decoded, note: note,
+                             simulated: source.isSimulated)
+        log.append(entry)
+        PacketRecorder.shared.record(entry)   // v4.2 packet logger (only while recording)
         if log.count > maxLogEntries { log.removeFirst(log.count - maxLogEntries) }
     }
 
@@ -328,7 +342,7 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     var visibleDevices: [FoundDevice] {
-        let list = showOnlyScooters ? devices.filter { $0.kind != .unknown } : devices
+        let list = showOnlyScooters ? devices.filter { $0.kind != .unknown || $0.confidence != .none } : devices
         return list.sorted { a, b in
             if a.confidence != b.confidence { return a.confidence > b.confidence }
             return a.rssi > b.rssi
@@ -424,6 +438,9 @@ final class BLEManager: NSObject, ObservableObject {
         adapterID = GenericReadOnlyAdapter.adapterID
         matchConfidence = .none
         writeGuard.channelReady = false
+        fardriver = nil
+        ninebot = nil
+        fardriverStream = FardriverStream()
     }
 
     // MARK: Channels
@@ -470,6 +487,16 @@ final class BLEManager: NSObject, ObservableObject {
                 adapterID = Joyhis365Adapter.adapterID
                 matchConfidence = .services
             }
+        }
+        // v4.2: nothing detected, but the Garage says this is a Fardriver / Ninebot vehicle.
+        if (kind == .unknown || kind == .nusOther), adapterID == GenericReadOnlyAdapter.adapterID,
+           let hint = adapterHint(p.identifier), hint == FardriverAdapter.adapterID || hint == NinebotAdapter.adapterID {
+            adapterID = hint
+            matchConfidence = .nameOnly
+        }
+        if isReadOnlyAdapter {
+            kind = .unknown          // the listen-only path below: subscribe, never write
+            if adapterID == NinebotAdapter.adapterID { ninebot = NinebotTelemetry() }
         }
         info("Identified: \(adapter.displayName) (\(adapter.level.rawValue)), match: \(matchConfidence)")
         rememberConnected()
@@ -734,6 +761,7 @@ final class BLEManager: NSObject, ObservableObject {
     /// each send needs its own confirmation. Unknown frames are blocked by the classifier.
     func sendManual(_ bytes: [UInt8], scramble: Bool, to charName: String, source label: String) -> Bool {
         guard !isSimulating else { info("Simulation: manual frames are never sent."); return false }
+        guard !isReadOnlyAdapter else { info("Not sent: \(adapter.displayName) is read-only until a capture (v4.2)."); return false }
         guard let c = allCharacteristics().first(where: { Proto.name(for: $0.uuid) == charName }) else {
             info("Not sent: no characteristic \(charName)")
             return false
@@ -1185,9 +1213,34 @@ extension BLEManager: CBPeripheralDelegate {
             handleVolpam(bytes, from: n)
         } else {
             noteRx()
-            let hints = Proto.rawHints(bytes)
+            var hints = Proto.rawHints(bytes)
+            if let note = readOnlyDecode(bytes) { hints = note }
             addLog(.rx, n, raw: bytes, note: hints)
         }
+    }
+
+    /// v4.2: Fardriver / Ninebot frames, decoded read-only. Also spots a Fardriver by its
+    /// frame shape (AA + valid CRC), the way a J078 is spotted by its status frame.
+    private func readOnlyDecode(_ bytes: [UInt8]) -> String? {
+        guard kind == .unknown || kind == .nusOther else { return nil }
+        if adapterID == NinebotAdapter.adapterID {
+            var t = ninebot ?? NinebotTelemetry()
+            t.feed(bytes)
+            ninebot = t
+            return "Ninebot: \(t.validFrames) read, \(t.encryptedFrames) encrypted"
+        }
+        guard adapterID == FardriverAdapter.adapterID || adapterID == GenericReadOnlyAdapter.adapterID else { return nil }
+        let frames = fardriverStream.feed(bytes)
+        guard !frames.isEmpty || adapterID == FardriverAdapter.adapterID else { return nil }
+        if adapterID != FardriverAdapter.adapterID {
+            guard fardriverStream.telemetry.validFrames >= 3 else { return "Fardriver-shaped frame (\(fardriverStream.telemetry.validFrames) of 3 to identify)" }
+            adapterID = FardriverAdapter.adapterID
+            matchConfidence = .services
+            info("Fardriver frames (AA + valid CRC) seen: showing Fardriver live data. Read-only.")
+        }
+        fardriver = fardriverStream.telemetry
+        let addr = frames.last?.address.map { String(format: "%02X", $0) } ?? "--"
+        return "Fardriver: \(frames.count) frame(s), block \(addr)"
     }
 
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {

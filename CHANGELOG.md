@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.2.0 beta (build 7): feature pack, e-bikes, Fardriver + Ninebot (read-only)
+
+Built and tested in CI (simulator). Not yet tried on a real phone, scooter or e-bike. Nothing from 4.1 was removed or capped.
+
+- New (all free): ride stats (distance labelled estimated), speed alert (haptic + sound), ride timer with laps, units everywhere, opt-in "last parked here" (when-in-use location), share card image, Garage maintenance reminders, long-press quick actions (light, park, mode), accent colour picker, master haptics switch, alternate app icons, packet logger with export, help/FAQ.
+- Garage "Add vehicle": e-scooter or e-bike, and the controller type (Joyhis/365, Zydtech, Ninebot, Fardriver, Unknown). New Fardriver ND entry in the compatibility seed (8 entries now).
+- `FardriverAdapter` (Experimental, read-only, never writes) and `NinebotAdapter` (Experimental, read-only, writes off) in the ProtocolAdapter layer. Experimental / Unknown vehicles show live data only, a "needs a capture to unlock controls" note and a packet-logger button. The terminal refuses to send to them.
+- Deferred: widgets (need an App Group = paid signing), Fardriver road speed, any writes to the new brands.
+- Tests: Fardriver CRC/parser/stream, Ninebot frames, speed alert, ride timer, maintenance, ride totals, Garage vehicle fields (incl. loading a 4.1 garage), and screen tests for every new screen (NewScreenTests42).
+
 ## 4.1.0 beta (build 6): onboarding, Garage, HackTheScoot Pro (test mode)
 
 Built and tested in CI (simulator). Not yet tried on a real phone or scooter. Nothing from 4.0.1 was removed or capped: the 6-45 km/h sliders, v3's Bluetooth flow, the terminal, themes, designer, layouts, replay and export all work as before and stay free.

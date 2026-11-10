@@ -40,9 +40,10 @@ final class GarageStore: ObservableObject {
 
     // MARK: Edits
 
-    func add(name: String, compatID: String, colorHex: String) {
+    func add(name: String, compatID: String, colorHex: String, vehicleType: VehicleType = .escooter, controller: ControllerType? = nil) {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        mutate { $0.add(GarageScooter(name: n.isEmpty ? "Scooter" : String(n.prefix(40)), compatID: compatID, colorHex: colorHex)) }
+        mutate { $0.add(GarageScooter(name: n.isEmpty ? "Scooter" : String(n.prefix(40)), compatID: compatID, colorHex: colorHex,
+                                      vehicleType: vehicleType, controller: controller)) }
     }
 
     func update(_ s: GarageScooter) { mutate { $0.update(s) } }
@@ -135,6 +136,12 @@ final class GarageStore: ObservableObject {
     func attach(_ b: BLEManager) {
         ble = b
         b.preferredScooterID = { [weak self] in self?.state.active?.bleID }
+        b.adapterHint = { [weak self] id in
+            guard let st = self?.state else { return nil }
+            if let s = st.scooters.first(where: { $0.bleID == id }) { return s.controllerType.adapterID }
+            if let a = st.active, a.bleID == nil, a.controllerType == .fardriver || a.controllerType == .ninebot { return a.controllerType.adapterID }
+            return nil
+        }
         b.onConnected = { [weak self] id, name, kind in
             self?.mutate { _ = $0.linkConnected(bleID: id, name: name, kind: kind) }
         }

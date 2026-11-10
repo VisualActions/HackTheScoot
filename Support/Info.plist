@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>HackTheScoot uses Bluetooth to find and talk to your scooter.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Only if you turn on "Remember where I parked": saves where your scooter was parked, on this phone only.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -42,9 +42,12 @@ struct ControlsView: View {
                 default:
                     if ble.isActive && !ble.isSimulating {
                         Section("Read-only") {
-                            Text("This device isn't identified as a J078 or Volpam, so HackTheScoot only listens. If it is your J078, use More > Developer Lab > Treat as.")
+                            Text(ble.isReadOnlyAdapter
+                                 ? "\(ble.adapter.displayName) support is experimental: live data only, nothing is sent."
+                                 : "This device isn't identified as a J078 or Volpam, so HackTheScoot only listens. If it is your J078, use More > Developer Lab > Treat as.")
                                 .foregroundColor(.secondary)
                         }
+                        ReadOnlyLiveView(ble: ble)
                     } else {
                         j078Sections   // shown (disabled) so you can see what's there before connecting
                     }

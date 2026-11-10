@@ -45,6 +45,8 @@ struct TripsView: View {
                     }
                 }
                 Section {
+                    NavigationLink { RideStatsView(trips: trips) } label: { Label("Ride stats", systemImage: "chart.line.uptrend.xyaxis") }
+                    NavigationLink { RideTimerView() } label: { Label("Ride timer and laps", systemImage: "stopwatch") }
                     NavigationLink { TripAnalyticsView(trips: trips) } label: {
                         HStack {
                             Label("Trip analytics", systemImage: "chart.bar.xaxis")
@@ -109,6 +111,7 @@ struct TripDetailView: View {
             Section("Summary") { Text(TripMath.summary(trip, mph: mph)).font(.footnote.monospaced()).textSelection(.enabled) }
             Section {
                 NavigationLink("Replay this trip") { TripReplayView(trip: trip, mph: mph) }
+                NavigationLink { ShareCardView(trip: trip) } label: { Label("Share card image", systemImage: "photo.on.rectangle") }
                 Button("Export summary") { if let u = trips.exportURL(trip, mph: mph) { share = ShareItem(url: u) } }
             }
             TripProExportSection(trip: trip, mph: mph)

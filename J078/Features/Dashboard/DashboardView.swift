@@ -8,6 +8,7 @@ struct DashboardView: View {
     @EnvironmentObject var themes: ThemeStore
     var openConnect: () -> Void
     @StateObject private var driver = GaugeDriver()
+    @State private var showQuick = false
     @AppStorage(Keys.unitsSwapped) private var unitsSwapped = false
     @AppStorage(Keys.keepAwake) private var keepAwake = true
     @AppStorage(Keys.showDashControls) private var showDashControls = true
@@ -70,6 +71,12 @@ struct DashboardView: View {
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = keepAwake }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .sheet(isPresented: $showQuick) {
+            QuickActionsSheet(ble: ble, close: { showQuick = false })
+                .environmentObject(themes)
+                .presentationDetents([.medium])
+                .preferredColorScheme(.dark)
+        }
     }
 
     @ViewBuilder private var background: some View {
@@ -97,6 +104,11 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
             Spacer()
+            Button { showQuick = true } label: {
+                Image(systemName: "bolt.circle").font(.title3).foregroundColor(DS.secondaryText)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Quick actions")
             if let s = ble.status {
                 Image(systemName: s.light ? "lightbulb.fill" : "lightbulb")
                     .foregroundColor(s.light ? themes.accent : DS.tertiaryText)
@@ -121,6 +133,12 @@ struct DashboardView: View {
                                    intensity: theme.animationIntensity, night: theme.night))
         }
         .accessibilityLabel("Speedometer")
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.45) {
+            if HapticsPref.on { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+            showQuick = true
+        }
+        .accessibilityAction(named: "Quick actions") { showQuick = true }
     }
 
     private var modeLine: some View {

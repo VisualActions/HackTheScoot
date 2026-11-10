@@ -25,20 +25,32 @@ struct GarageScooter: Codable, Identifiable, Equatable {
     var lastConnected: Date? = nil
     var lastStats: LastStats? = nil
     var created: Date = Date()
+    /// v4.2: e-scooter or e-bike, and the controller type the rider picked (nil = from the model).
+    var vehicleType: VehicleType = .escooter
+    var controller: ControllerType? = nil
+
+    /// The controller this vehicle uses: the rider's pick, else the model's adapter.
+    var controllerType: ControllerType { return controller ?? ControllerType.from(compatAdapter: compat.adapter) }
+    /// Experimental / unknown controllers: live data only until a capture.
+    var readOnlyUntilCapture: Bool { return controllerType.readOnlyUntilCapture || compat.level == .experimental || compat.level == .unsupported }
 
     var compat: CompatEntry { return CompatSeed.find(compatID) }
     var kind: ScooterKind { return compat.kind }
 
     enum CodingKeys: String, CodingKey {
         case id, name, compatID, colorHex, photoFile, notes, bleID, bleName, lastConnected, lastStats, created
+        case vehicleType, controller
     }
 
-    init(id: UUID = UUID(), name: String, compatID: String, colorHex: String = "#0A84FF", notes: String = "") {
+    init(id: UUID = UUID(), name: String, compatID: String, colorHex: String = "#0A84FF", notes: String = "",
+         vehicleType: VehicleType = .escooter, controller: ControllerType? = nil) {
         self.id = id
         self.name = name
         self.compatID = compatID
         self.colorHex = colorHex
         self.notes = notes
+        self.vehicleType = vehicleType
+        self.controller = controller
     }
 
     /// Tolerant decoding: a damaged field falls back instead of losing the whole garage.
@@ -55,6 +67,8 @@ struct GarageScooter: Codable, Identifiable, Equatable {
         lastConnected = (try? c.decodeIfPresent(Date.self, forKey: .lastConnected)) ?? nil
         lastStats = (try? c.decodeIfPresent(LastStats.self, forKey: .lastStats)) ?? nil
         created = ((try? c.decodeIfPresent(Date.self, forKey: .created)) ?? nil) ?? Date()
+        vehicleType = ((try? c.decodeIfPresent(VehicleType.self, forKey: .vehicleType)) ?? nil) ?? .escooter
+        controller = (try? c.decodeIfPresent(ControllerType.self, forKey: .controller)) ?? nil
     }
 }
 
