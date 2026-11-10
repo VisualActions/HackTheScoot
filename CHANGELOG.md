@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.1.0 beta (build 9): experimental KuKirin, Xiaomi and Ninebot
+
+Built and tested in CI (simulator) only. **Experimental, untested on hardware**: it should work, but nobody has tried it on a real KuKirin, Xiaomi or Ninebot yet. Nothing from 5.0 was removed or capped; the J078 and Volpam flows and v3's above-stock warning are unchanged. Published as the `v5.1-beta` prerelease; `v5-beta` (5.0) and `latest` (v3) are untouched.
+
+- **KuKirin G2 (2026) / G4** (`KukirinProtocol.swift`): read-only live data (G2: speed, battery volts, motor rpm, ride mode; G4: ride mode) from published observations (facts only). Nothing is ever written to a KuKirin.
+- **Xiaomi M365 / Ninebot session** (`NBXSession.swift`): plain M365 (`55 AA`) and plain Ninebot (`5A A5`) reads; if neither answers, a Pair button.
+- **Clean-room Ninebot Encryption2 + pairing** (`NBEncryption2.swift`) from the Apache-2.0 NootNooot spec (no AGPL code). PRE_COMM / SET_PWD (power button) / AUTH, tried over four documented variants. The session password is random per phone and kept in the Keychain.
+- **Experimental settings** (read first, standing still, confirm, write once, read back): M365 (plain) KERS 0x7B, cruise 0x7C, tail light 0x7D; Max G30 cruise 0x7C. Encrypted Xiaomi models stay read-only. Everything else is blocked by `NBXSafety` (firmware/IAP, power off, reboot, engine, lock/unlock, PIN, serial, speed limit, max speed/power, BMS).
+- **Ninebot and Xiaomi error codes** (`NBErrorCodes.swift`): own wording, facts from the ScooterHacking wiki (CC BY-SA) and Ninebot's document.
+- Capture guide and compatibility checker show each brand's real status; compatibility DB adds KuKirin G2 and M365 Pro / Pro 2 / 1S / Essential; Garage controller type KuKirin.
+- `ACKNOWLEDGEMENTS.md` + `NOTICE` (Apache-2.0 attribution), and the in-app credits list every source.
+- CI: the release workflow now publishes `v5.1-beta` and leaves `v5-beta` alone.
+- Tests: V51Tests (KuKirin parser, AES/FIPS-197 check, Encryption2 vectors from an independent implementation of the spec, pairing flow on a fake radio, read-back, the safety gate, error codes) and NewScreenTests51 (every new screen and section, portrait + landscape, dark + light).
+
 ## 5.0.0 beta (build 8): public release candidate
 
 Built and tested in CI (simulator). Not yet tried on a real phone, scooter or e-bike. Nothing from 4.2 was removed or capped. Published as the `v5-beta` prerelease; `latest` is still v3.

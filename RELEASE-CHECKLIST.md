@@ -1,12 +1,14 @@
 # Release checklist: from 5.0 beta to a public release
 
-Nothing on this list is switched on yet. 5.0.0 is published as the **v5-beta prerelease**; `main` and the `latest` release are still v3. Billing is Stripe **TEST mode** only. Each step says who has to do it.
+Nothing on this list is switched on yet. 5.1.0 is published as the **v5.1-beta prerelease** (5.0.0 stays on `v5-beta`); `main` and the `latest` release are still v3.
+
+**5.1 note:** the KuKirin, Xiaomi and Ninebot features are experimental and untested on hardware. Before going public, test them on at least one real scooter of each kind (or keep them labelled experimental, as they are now). The Ninebot pairing is clean-room code from an Apache-2.0 spec: keep `NOTICE` and `ACKNOWLEDGEMENTS.md` in every release, and in the App Store "acknowledgements" if it ever goes there. Billing is Stripe **TEST mode** only. Each step says who has to do it.
 
 Not legal advice. Re-check every requirement on Apple's and Stripe's own pages when you do it.
 
 ## A. Make v5 the main download on GitHub (Credence can do this, when he says go)
 
-Do this only after 5.0 has been tested on a real iPhone and the J078 (connect, speed, modes, light, park, speed limits) and, if possible, the Volpam.
+Do this only after 5.x has been tested on a real iPhone and the J078 (connect, speed, modes, light, park, speed limits) and, if possible, the Volpam.
 
 1. Open PR #2 (`v4-dev` -> `main`): https://github.com/VisualActions/HackTheScoot/pull/2
 2. Check the PR's checks are green (secret scan, license scan, unit tests, screen tests, IPA build).

@@ -1,6 +1,22 @@
 # Contribute a capture
 
-HackTheScoot only controls a vehicle after a real Bluetooth capture proves what each button sends. New brands (Fardriver, Ninebot / Segway / Xiaomi, unknown ones) start **read-only**: live data only, nothing is ever sent to them. A capture from someone who owns one is how that changes.
+HackTheScoot only controls a vehicle after a real Bluetooth capture proves what each button sends. New brands start **read-only**: live data only. A capture from someone who owns one is how that changes.
+
+## Where each brand stands (5.1)
+
+| Brand | Now | What a capture would add |
+|---|---|---|
+| Joyhis J078 | Controls verified from captures | Battery / odometer meaning |
+| VOLPAM (Zydtech) | Speed limit verified | Lights and the other feature bits |
+| KuKirin G2 (2026) / G4 | **Experimental, untested on hardware:** live data only (G2 speed, volts, rpm, mode; G4 mode). Never written to | **Every control**: no KuKirin command is public. Capture the official **Kugoo** app |
+| Xiaomi M365 (old Bluetooth firmware) | **Experimental, untested on hardware:** live data + KERS, cruise, tail light (read, confirm, read back) | Headlight; confirmation of the three settings on your firmware |
+| Xiaomi M365 Pro / Pro 2 / 1S / Essential | **Experimental, untested on hardware:** our own Ninebot pairing, then live data only | Any setting (capture the Mi Home app) |
+| Xiaomi M365 (newer Xiaomi login) | Not supported (only AGPL code exists) | - |
+| Ninebot Max G30 | **Experimental, untested on hardware:** live data + cruise control; pairing for encrypted firmware | Lights, KERS, speed mode (the public sources disagree). Capture the Segway-Ninebot app |
+| Fardriver | Live data only, never written to | - |
+| Anything else | Read-only (packet logger) | Everything |
+
+If you own a KuKirin, a G30 or a Xiaomi and try the 5.1 beta, a capture (and a note saying whether the live numbers match your dashboard) is the most useful thing you can send.
 
 It takes about 5 minutes. In the app: **More > Help unlock your scooter or e-bike** (also linked from the read-only vehicle screen, Help and the packet logger).
 

@@ -1,15 +1,37 @@
-# HackTheScoot (v5.0 beta, public release candidate)
+# HackTheScoot (v5.1 beta)
 
-An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Volpam**), plus read-only support for new brands until someone sends a capture. Everything it does on the J078 was decoded from real Bluetooth captures of the 365 app on Nov 9 2026. Nothing is guessed silently: every feature below says how sure we are.
+An iPhone companion for the **Joyhis J078** scooter (and, carefully, dad's **Volpam**), plus experimental support for more brands. Everything it does on the J078 was decoded from real Bluetooth captures of the 365 app on Nov 9 2026. Nothing is guessed silently: every feature below says how sure we are.
 
-> **Stable vs beta.** `main` is v3, the stable build (release **latest**). v5 lives on the `v4-dev` branch (PR #2) and is published as the separate prerelease **v5-beta** only after the secret scan, license scan, unit tests and screen tests pass. Merging PR #2 is what makes v5 the main download: see [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
+> **Stable vs beta.** `main` is v3, the stable build (release **latest**). v5 lives on the `v4-dev` branch (PR #2) and is published as a separate prerelease (**v5.1-beta** now) only after the secret scan, license scan, unit tests and screen tests pass. Merging PR #2 is what makes v5 the main download: see [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
 
 Downloads:
 - Stable v3: https://github.com/VisualActions/HackTheScoot/releases/latest
-- v5 beta: https://github.com/VisualActions/HackTheScoot/releases/download/v5-beta/HackTheScoot-5.0.0-beta-unsigned.ipa
-- Older 4.2 beta: https://github.com/VisualActions/HackTheScoot/releases/tag/v4-beta
+- 5.1 beta: https://github.com/VisualActions/HackTheScoot/releases/download/v5.1-beta/HackTheScoot-5.1.0-beta-unsigned.ipa
+- Earlier betas: 5.0 https://github.com/VisualActions/HackTheScoot/releases/tag/v5-beta, 4.2 https://github.com/VisualActions/HackTheScoot/releases/tag/v4-beta
 
 **Got a scooter or e-bike that isn't supported?** Send a capture: [CAPTURES.md](CAPTURES.md), or in the app More > Help unlock your scooter or e-bike.
+
+## What's new in 5.1 (beta): experimental, untested on hardware
+
+Built and tested in CI (simulator) only. **Nobody has tried any of this on a real KuKirin, Xiaomi or Ninebot yet**, so it should work, but it might not. Nothing from 5.0 was removed or capped: the J078 and Volpam controls, v3's above-stock warning and every 5.0 feature are exactly as before. Everything below is free (nothing safety-related is behind Pro).
+
+- **KuKirin G2 (2026) and G4: live data, read-only.** G2: speed, battery voltage, motor rpm, ride mode. G4: ride mode. Found by the `FFF0` service plus a `G2`/`G4`/KuKirin name. **Nothing is ever written to a KuKirin** (no control command is public, and the `F000FFC0` firmware-update service is never touched).
+- **Xiaomi M365 (old, plain Bluetooth firmware):** live data (speed, battery, odometer, trip, temperature, range, error code, firmware) plus three **experimental settings**: KERS (weak / medium / strong), cruise control (off / on) and tail light (off / always on). Each one: the app reads the current value first, only works while the scooter stands still, asks you, sends one message, then reads the value back and tells you honestly whether it changed.
+- **Ninebot pairing, our own code:** a clean-room implementation of the Ninebot "Encryption2" session and pairing (press the scooter's power button once), written from the **Apache-2.0** NootNooot spec. No AGPL code (NinebotCrypto) was used or read. Used for the **Max G30** and the **M365 Pro, Pro 2, 1S and Essential**.
+- **Ninebot Max G30:** live data plus one experimental setting, **cruise control**. Lights/units, KERS, speed mode and max speed stay **off** because the public sources disagree about them.
+- **M365 Pro / Pro 2 / 1S / Essential:** pairing, then live data only (read-only).
+- **Ninebot and Xiaomi error codes:** tap an error number to see what it usually means and what to check (More > Fault explanations, or the live data screen).
+- **Real status per brand** in the capture guide and the compatibility checker, so people know what a capture would add.
+
+**Never sent, on any brand, whatever you tap:** firmware / update commands, power off, reboot, engine, lock / unlock, PIN or password writes, serial-number writes, speed-limit, max-speed, max-power or battery writes. **No firmware flashing** of any kind. The app never pretends to be a rental IoT board, so the motor-lock heartbeat timer that rental scooters use never starts; disconnecting or closing the app changes nothing on the scooter. Unknown models stay read-only.
+
+Credits for every source: [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md) and [NOTICE](NOTICE).
+
+### Not in 5.1 (and why)
+- **Firmware flashing:** skipped on purpose. A dropped connection mid-flash can brick a scooter, ScooterHacking's own tools don't support iPhone, and firmware files can't be shared.
+- **M365 on the newer Xiaomi login:** the only public code is AGPL, so it isn't supported.
+- **KuKirin controls:** no command is public. A capture of the official Kugoo app would show them.
+- **G30 lights, KERS, speed mode:** the sources disagree; a capture of the Segway-Ninebot app settles it.
 
 ## What's new in 5.0 (beta)
 

@@ -660,7 +660,7 @@ struct ReadOnlyLiveView: View {
         Group {
             Section(header: Text("\(ble.adapter.displayName) · \(ble.adapter.level.rawValue)"),
                     footer: Text("Live data only. Needs a capture to unlock controls: record one with the packet logger and send it in.")) {
-                Label("Read-only: nothing is sent to this vehicle.", systemImage: "lock.shield")
+                Label(ble.isNBXSession ? "Reads only. A setting changes only when you confirm it (experimental)." : "Read-only: nothing is sent to this vehicle.", systemImage: "lock.shield")
                     .font(.subheadline)
                 NavigationLink { PacketLoggerView(ble: ble) } label: {
                     Label(PacketRecorder.shared.isRecording ? "Packet logger (recording)" : "Start the packet logger", systemImage: "record.circle")

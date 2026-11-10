@@ -42,7 +42,9 @@ struct ControlsView: View {
                 default:
                     if ble.isActive && !ble.isSimulating {
                         Section("Read-only") {
-                            Text(ble.isReadOnlyAdapter
+                            Text(ble.isNBXSession
+                                 ? "\(ble.adapter.displayName) support is experimental and untested on hardware: HackTheScoot asks for live data (reads only) and changes a setting only when you confirm one under Experimental settings."
+                                 : ble.isReadOnlyAdapter
                                  ? "\(ble.adapter.displayName) support is experimental: live data only, nothing is sent."
                                  : "This device isn't identified as a J078 or Volpam, so HackTheScoot only listens. If it is your J078, use More > Developer Lab > Treat as.")
                                 .foregroundColor(.secondary)
